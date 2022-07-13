@@ -1,0 +1,9 @@
+query OpenIssues($owner: "aicers"!, $name:"github-dashboard-server"!) {
+  repository(owner: $owner name: $name) {
+    issues(first: 10) {
+      nodes {
+        title
+      }
+    }
+  }
+}
