@@ -17,3 +17,8 @@ Build and serve the app with Cargo as follows:
 - `config_file`: Toml extension file name including path.
 
 The web server will run using the address value in the config file.
+
+```
+cargo run -- -V
+```
+- `-V`: option shows the current name and version of the program.
