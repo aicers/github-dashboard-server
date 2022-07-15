@@ -1,4 +1,5 @@
 mod conf;
+mod graphql;
 mod web;
 
 use conf::{load_config, parse_socket_addr};
@@ -20,5 +21,6 @@ async fn main() {
             panic!("{:?}", e);
         }
     };
-    web::serve(socket_addr).await;
+    let schema = graphql::schema();
+    web::serve(schema, socket_addr).await;
 }
