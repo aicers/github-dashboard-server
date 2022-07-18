@@ -27,8 +27,7 @@ cargo run -- [config_file]
 
 The web server will run using the address value in the config file.
 
-```sh
-cargo run -- -V
-```
+## FLAGS
 
-* `-V`: option shows the current name and version of the program.
+* `-h`, `--help`: Prints help information
+* `-V`, `--version`: Prints version information
