@@ -1,8 +1,10 @@
 mod conf;
+mod github;
 mod graphql;
 mod web;
 
 use conf::{load_info, parse_socket_addr};
+use github::send_github_query;
 use std::env;
 
 #[tokio::main]
@@ -24,6 +26,11 @@ async fn main() {
             panic!("{:?}", e);
         }
     };
+
+    if let Err(e) = send_github_query(&config.repository.owner, &config.repository.name).await {
+        panic!("{:?}", e);
+    }
+
     let schema = graphql::schema();
     web::serve(schema, socket_addr).await;
 }
