@@ -26,6 +26,15 @@ pub struct Config {
 
 const PKG_NAME: &str = env!("CARGO_PKG_NAME");
 const PKG_VER: &str = env!("CARGO_PKG_VERSION");
+pub const USG: &str = "USAGE:
+    github-dashboard-server <CONFIG>
+    
+FLAGS:
+    -h, --help       Prints help information
+    -V, --version    Prints version information
+
+ARG:
+    <CONFIG>    A TOML config file";
 
 pub fn load_info(mut args: Args) -> Result<Config> {
     let mut config_str = String::new();
@@ -34,6 +43,10 @@ pub fn load_info(mut args: Args) -> Result<Config> {
         match args_val.as_str() {
             "-V" | "--version" => {
                 println!("{} {}", PKG_NAME, PKG_VER);
+                exit(0);
+            }
+            "-h" | "--help" => {
+                println!("{}", USG);
                 exit(0);
             }
 
@@ -55,7 +68,7 @@ pub fn load_info(mut args: Args) -> Result<Config> {
                     };
                     Ok(config)
                 } else {
-                    bail!("Failed to load args, Pleash enter correct args value");
+                    bail!("Failed to load args, Please enter correct args value");
                 }
             }
         }
