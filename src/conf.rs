@@ -12,8 +12,15 @@ pub struct ServerAddr {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct RepoInfo {
+    pub owner: String,
+    pub name: String,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct Config {
     pub web: ServerAddr,
+    pub repository: RepoInfo,
 }
 
 const PKG_NAME: &str = env!("CARGO_PKG_NAME");
