@@ -1,0 +1,7 @@
+ [web]
+ address = "127.0.0.1:8080"
+
+ [repository]
+ owner = "aicers"
+ name = "github-dashboard-server"
+ 
