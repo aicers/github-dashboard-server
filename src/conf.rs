@@ -1,5 +1,6 @@
 use anyhow::{anyhow, bail, Result};
 use serde::Deserialize;
+use std::env;
 use std::env::Args;
 use std::fs::File;
 use std::io::prelude::*;
@@ -28,30 +29,39 @@ const PKG_VER: &str = env!("CARGO_PKG_VERSION");
 
 pub fn load_info(mut args: Args) -> Result<Config> {
     let mut config_str = String::new();
-    if args.nth(1) == Some("-V".to_string()) {
-        println!("{} {}", PKG_NAME, PKG_VER);
-        exit(0);
-    } else if args.len() > 1 {
-        if let Some(f_name) = args.nth(1) {
-            if let Err(e) = File::open(&f_name).and_then(|mut f| f.read_to_string(&mut config_str))
-            {
-                bail!("Failed to open file, Please check file name: {:?}", e);
+
+    if let Some(args_val) = args.nth(1) {
+        match args_val.as_str() {
+            "-V" | "--version" => {
+                println!("{} {}", PKG_NAME, PKG_VER);
+                exit(0);
+            }
+
+            default => {
+                if default.contains(".toml") {
+                    if let Err(e) =
+                        File::open(default).and_then(|mut f| f.read_to_string(&mut config_str))
+                    {
+                        bail!("Failed to open file, Please check file name: {:?}", e);
+                    }
+                    let config = match toml::from_str::<Config>(&config_str) {
+                        Ok(ret) => ret,
+                        Err(e) => {
+                            bail!(
+                                "Failed to parse Toml document, Please check file contents: {:?}",
+                                e
+                            );
+                        }
+                    };
+                    Ok(config)
+                } else {
+                    bail!("Failed to load args, Pleash enter correct args value");
+                }
             }
         }
     } else {
         bail!("Failed to load args, Please enter the args and run it");
     }
-
-    let config = match toml::from_str::<Config>(&config_str) {
-        Ok(ret) => ret,
-        Err(e) => {
-            bail!(
-                "Failed to parse Toml document, Please check file contents: {:?}",
-                e
-            );
-        }
-    };
-    Ok(config)
 }
 
 pub fn parse_socket_addr(addr_str: &str) -> Result<SocketAddr> {
