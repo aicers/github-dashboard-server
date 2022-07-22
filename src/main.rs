@@ -33,7 +33,13 @@ async fn main() {
         }
     };
 
-    if let Err(error) = send_github_query(&config.repository.owner, &config.repository.name).await {
+    if let Err(error) = send_github_query(
+        &config.repository.owner,
+        &config.repository.name,
+        &config.certification.token,
+    )
+    .await
+    {
         eprintln!("Problem while sending github query. {}", error);
     }
 

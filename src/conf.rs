@@ -19,16 +19,22 @@ pub struct RepoInfo {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct Certification {
+    pub token: String,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct Config {
     pub web: ServerAddr,
     pub repository: RepoInfo,
+    pub certification: Certification,
 }
 
 const PKG_NAME: &str = env!("CARGO_PKG_NAME");
 const PKG_VER: &str = env!("CARGO_PKG_VERSION");
 pub const USG: &str = "USAGE:
     github-dashboard-server <CONFIG>
-    
+
 FLAGS:
     -h, --help       Prints help information
     -V, --version    Prints version information
