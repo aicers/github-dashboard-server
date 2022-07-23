@@ -16,5 +16,9 @@ pub async fn serve(
         },
     );
 
-    warp::serve(filter).run(socketaddr).await;
+    let route_graphql = warp::path("graphql").and(warp::any()).and(filter);
+    let route_home = warp::path::end().map(|| "");
+    let routes = warp::post().and(route_graphql.or(route_home));
+
+    warp::serve(routes).run(socketaddr).await;
 }
