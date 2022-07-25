@@ -42,7 +42,7 @@ FLAGS:
 ARG:
     <CONFIG>    A TOML config file";
 
-pub fn load_info(mut args: Args) -> Result<Config> {
+pub fn load_usage(mut args: Args) -> Result<Config> {
     let mut config_str = String::new();
 
     if let Some(args_val) = args.nth(1) {
@@ -80,6 +80,34 @@ pub fn load_info(mut args: Args) -> Result<Config> {
         }
     } else {
         bail!("Failed to load args, Please enter the args and run it");
+    }
+}
+
+pub fn load_config(mut args: Args) -> Result<Config> {
+    let mut config_str = String::new();
+
+    if let Some(args_val) = args.nth(1) {
+        let default = args_val.as_str();
+        if default.contains(".toml") {
+            if let Err(e) = File::open(default).and_then(|mut f| f.read_to_string(&mut config_str))
+            {
+                bail!("Failed to open file, Please check file name: {:?}", e);
+            }
+            let config = match toml::from_str::<Config>(&config_str) {
+                Ok(ret) => ret,
+                Err(e) => {
+                    bail!(
+                        "Failed to parse Toml document, Please check file contents: {:?}",
+                        e
+                    );
+                }
+            };
+            Ok(config)
+        } else {
+            bail!("Failed to load args, Please enter correct args value");
+        }
+    } else {
+        bail!("Failed to load args, Please enter correct args value");
     }
 }
 
