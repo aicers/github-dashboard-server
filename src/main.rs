@@ -3,7 +3,7 @@ mod github;
 mod graphql;
 mod web;
 
-use conf::{load_info, parse_socket_addr};
+use conf::{load_config, load_usage, parse_socket_addr};
 use github::send_github_query;
 use std::env;
 use std::process::exit;
@@ -12,15 +12,21 @@ use std::process::exit;
 async fn main() {
     println!("AICE GitHub Dashboard Server");
 
-    let args = env::args();
+    let usage_args = env::args();
+    let config_args = env::args();
 
-    let config = match load_info(args) {
+    let _usage_config = match load_usage(usage_args) {
         Ok(ret) => ret,
-        Err(_error) => {
-            eprintln!(
-                "Problem while loading info. Refer to usage below. \n{}",
-                conf::USG
-            );
+        Err(error) => {
+            eprintln!("Problem while loading configuration toml. {}", error);
+            exit(1);
+        }
+    };
+
+    let config = match load_config(config_args) {
+        Ok(ret) => ret,
+        Err(error) => {
+            eprintln!("Problem while loading usage. {}", error);
             exit(1);
         }
     };
