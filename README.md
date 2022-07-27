@@ -31,6 +31,10 @@ cargo run -- [config_file]
 
 The web server will run using the address value in the config file.
 
+Connect to `http://localhost:8080` in your browser to run the app,
+
+* `http://localhost:8080/graphql/playground` to playground
+
 ## FLAGS
 
 * `-h`, `--help`: Prints help information
