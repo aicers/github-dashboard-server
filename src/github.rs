@@ -1,6 +1,10 @@
 use anyhow::Result;
-use graphql_client::{GraphQLQuery, Response};
+use graphql_client::GraphQLQuery;
 use reqwest::Client;
+use serde::{Deserialize, Serialize};
+
+const GITHUB_URL: &str = "https://api.github.com/graphql";
+const APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
 
 #[derive(GraphQLQuery)]
 #[graphql(
@@ -10,14 +14,37 @@ use reqwest::Client;
 )]
 pub struct OpenIssues;
 
-const GITHUB_URL: &str = "https://api.github.com/graphql";
-const APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
+#[derive(Debug, Deserialize, Serialize)]
+pub struct Data {
+    data: Repository,
+}
 
-pub async fn send_github_query(
+#[derive(Debug, Deserialize, Serialize)]
+pub struct Repository {
+    repository: Issues,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct Issues {
+    issues: Nodes,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct Nodes {
+    nodes: Vec<GitHubIssue>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct GitHubIssue {
+    pub number: i32,
+    pub title: String,
+}
+
+pub async fn send_github_issue_query(
     owner: &str,
     name: &str,
     token: &str,
-) -> Result<Response<open_issues::ResponseData>> {
+) -> Result<Vec<GitHubIssue>> {
     let variables = open_issues::Variables {
         owner: owner.to_string(),
         name: name.to_string(),
@@ -30,7 +57,12 @@ pub async fn send_github_query(
         .json(&request_body)
         .send()
         .await?;
-    let response_body: Response<open_issues::ResponseData> = res.json().await?;
-    println!("{:#?}", response_body);
-    Ok(response_body)
+
+    let respose_body = res.text().await?;
+    let issue_result = serde_json::from_str::<Data>(&respose_body)?
+        .data
+        .repository
+        .issues
+        .nodes;
+    Ok(issue_result)
 }

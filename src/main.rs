@@ -1,12 +1,16 @@
 mod conf;
+mod database;
 mod github;
 mod graphql;
 mod web;
 
 use conf::{load_config, parse_socket_addr};
-use github::send_github_query;
+use database::Database;
+use github::send_github_issue_query;
 use std::env;
 use std::process::exit;
+
+const DB_TREE_NAME: &str = "issues";
 
 #[tokio::main]
 async fn main() {
@@ -42,19 +46,34 @@ async fn main() {
     let socket_addr = match parse_socket_addr(&config.web.address) {
         Ok(ret) => ret,
         Err(error) => {
-            println!("Problem while parsing socket address. {}", error);
+            eprintln!("Problem while parsing socket address. {}", error);
             exit(1);
         }
     };
 
-    if let Err(error) = send_github_query(
+    let database = match Database::connect(&config.database.db_name, DB_TREE_NAME) {
+        Ok(ret) => ret,
+        Err(error) => {
+            eprintln!("Problem while Connect Sled Database. {}", error);
+            exit(1);
+        }
+    };
+
+    match send_github_issue_query(
         &config.repository.owner,
         &config.repository.name,
         &config.certification.token,
     )
     .await
     {
-        eprintln!("Problem while sending github query. {}", error);
+        Ok(resp) => {
+            if let Err(error) = database.insert_issues(resp) {
+                eprintln!("Problem while insert Sled Database. {}", error);
+            }
+        }
+        Err(error) => {
+            eprintln!("Problem while sending github query. {}", error);
+        }
     }
 
     let schema = graphql::schema();
