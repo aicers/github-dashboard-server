@@ -23,10 +23,16 @@ pub struct Certification {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct Database {
+    pub db_name: String,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct Config {
     pub web: ServerAddr,
     pub repository: RepoInfo,
     pub certification: Certification,
+    pub database: Database,
 }
 
 pub const PKG_NAME: &str = env!("CARGO_PKG_NAME");
