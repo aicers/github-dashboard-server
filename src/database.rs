@@ -2,6 +2,7 @@ use crate::{github::GitHubIssue, graphql::Issue};
 use anyhow::{bail, Result};
 use sled::{Db, Tree};
 
+#[derive(Clone)]
 pub struct Database {
     #[allow(unused)]
     db: Db,

@@ -9,8 +9,10 @@ use database::Database;
 use github::send_github_issue_query;
 use std::env;
 use std::process::exit;
+use tokio::{task, time};
 
 const DB_TREE_NAME: &str = "issues";
+const ONE_HOUR: u64 = 60 * 60;
 
 #[tokio::main]
 async fn main() {
@@ -58,24 +60,30 @@ async fn main() {
             exit(1);
         }
     };
+    let db = database.clone();
 
-    match send_github_issue_query(
-        &config.repository.owner,
-        &config.repository.name,
-        &config.certification.token,
-    )
-    .await
-    {
-        Ok(resp) => {
-            if let Err(error) = database.insert_issues(resp) {
-                eprintln!("Problem while insert Sled Database. {}", error);
+    task::spawn(async move {
+        let mut itv = time::interval(time::Duration::from_secs(ONE_HOUR));
+        loop {
+            itv.tick().await;
+            match send_github_issue_query(
+                &config.repository.owner,
+                &config.repository.name,
+                &config.certification.token,
+            )
+            .await
+            {
+                Ok(resp) => {
+                    if let Err(error) = db.insert_issues(resp) {
+                        eprintln!("Problem while insert Sled Database. {}", error);
+                    }
+                }
+                Err(error) => {
+                    eprintln!("Problem while sending github query. {}", error);
+                }
             }
         }
-        Err(error) => {
-            eprintln!("Problem while sending github query. {}", error);
-        }
-    }
-
+    });
     let schema = graphql::schema(database);
     web::serve(schema, socket_addr).await;
 }
