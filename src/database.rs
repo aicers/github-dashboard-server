@@ -1,4 +1,4 @@
-use crate::github::GitHubIssue;
+use crate::{github::GitHubIssue, graphql::Issue};
 use anyhow::{bail, Result};
 use sled::{Db, Tree};
 
@@ -53,11 +53,15 @@ impl Database {
         Ok(())
     }
 
-    #[allow(unused)]
-    pub fn select_all(&self) -> Result<Vec<String>> {
-        let mut all_vec: Vec<String> = Vec::new();
-        for (_, val) in self.tree.iter().filter_map(std::result::Result::ok) {
-            all_vec.push(bincode::deserialize::<String>(&val)?);
+    pub fn select_all(&self) -> Result<Vec<Issue>> {
+        let mut all_vec: Vec<Issue> = Vec::new();
+        for (key, val) in self.tree.iter().filter_map(std::result::Result::ok) {
+            all_vec.push(Issue {
+                owner: String::new(),
+                repo: String::new(),
+                number: bincode::deserialize::<i32>(&key)?,
+                title: bincode::deserialize::<String>(&val)?,
+            });
         }
         Ok(all_vec)
     }

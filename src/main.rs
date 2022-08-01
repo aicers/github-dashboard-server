@@ -76,6 +76,6 @@ async fn main() {
         }
     }
 
-    let schema = graphql::schema();
+    let schema = graphql::schema(database);
     web::serve(schema, socket_addr).await;
 }
