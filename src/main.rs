@@ -74,7 +74,9 @@ async fn main() {
             .await
             {
                 Ok(resp) => {
-                    if let Err(error) = db.insert_issues(resp) {
+                    if let Err(error) =
+                        db.insert_issues(resp, &config.repository.owner, &config.repository.name)
+                    {
                         eprintln!("Problem while insert Sled Database. {}", error);
                     }
                 }

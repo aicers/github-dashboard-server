@@ -1,5 +1,6 @@
 use crate::{github::GitHubIssue, graphql::Issue};
 use anyhow::{bail, Result};
+use regex::Regex;
 use sled::{Db, Tree};
 
 #[derive(Clone)]
@@ -24,15 +25,14 @@ impl Database {
         Ok(Database { db, tree })
     }
 
-    pub fn insert(&self, key: i32, val: &str) -> Result<()> {
-        self.tree
-            .insert(&bincode::serialize(&key)?, bincode::serialize(&val)?)?;
+    pub fn insert(&self, key: &str, val: &str) -> Result<()> {
+        self.tree.insert(key, bincode::serialize(&val)?)?;
         Ok(())
     }
 
     #[allow(unused)]
-    pub fn select(&self, key: i32) -> Result<String> {
-        if let Ok(Some(val)) = self.tree.get(bincode::serialize(&key)?) {
+    pub fn select(&self, key: &str) -> Result<String> {
+        if let Ok(Some(val)) = self.tree.get(key) {
             let result: String = bincode::deserialize(&val)?;
             return Ok(result);
         }
@@ -40,8 +40,8 @@ impl Database {
     }
 
     #[allow(unused)]
-    pub fn delete(&self, key: i32) -> Result<String> {
-        if let Ok(Some(val)) = self.tree.remove(bincode::serialize(&key)?) {
+    pub fn delete(&self, key: &str) -> Result<String> {
+        if let Ok(Some(val)) = self.tree.remove(key) {
             let result: String = bincode::deserialize(&val)?;
             return Ok(result);
         }
@@ -56,20 +56,34 @@ impl Database {
 
     pub fn select_all(&self) -> Result<Vec<Issue>> {
         let mut all_vec: Vec<Issue> = Vec::new();
+        let re = Regex::new(r"(?P<owner>\S+)/(?P<name>\S+)#(?P<number>[0-9]+)")?;
         for (key, val) in self.tree.iter().filter_map(std::result::Result::ok) {
-            all_vec.push(Issue {
-                owner: String::new(),
-                repo: String::new(),
-                number: bincode::deserialize::<i32>(&key)?,
-                title: bincode::deserialize::<String>(&val)?,
-            });
+            match re.captures(String::from_utf8(key.to_vec())?.as_str()) {
+                Some(caps) => all_vec.push(Issue {
+                    owner: match caps.name("owner") {
+                        Some(x) => String::from(x.as_str()),
+                        None => unreachable!(),
+                    },
+                    repo: match caps.name("name") {
+                        Some(x) => String::from(x.as_str()),
+                        None => unreachable!(),
+                    },
+                    number: match caps.name("number") {
+                        Some(x) => x.as_str().trim().parse::<i32>()?,
+                        None => unreachable!(),
+                    },
+                    title: bincode::deserialize::<String>(&val)?,
+                }),
+                None => eprintln!("key doesn't match owner/name#number"),
+            }
         }
         Ok(all_vec)
     }
 
-    pub fn insert_issues(&self, resp: Vec<GitHubIssue>) -> Result<()> {
+    pub fn insert_issues(&self, resp: Vec<GitHubIssue>, owner: &str, name: &str) -> Result<()> {
         for item in resp {
-            self.insert(item.number, item.title.as_str())?;
+            let keystr: String = format!("{}/{}#{}", owner, name, item.number);
+            self.insert(&keystr, &item.title)?;
         }
         Ok(())
     }
