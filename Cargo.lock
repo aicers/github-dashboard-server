@@ -539,6 +539,7 @@ dependencies = [
  "async-graphql-warp",
  "bincode",
  "graphql_client",
+ "regex",
  "reqwest",
  "serde",
  "serde_json",
