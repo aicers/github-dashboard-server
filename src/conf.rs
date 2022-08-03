@@ -14,7 +14,7 @@ pub struct ServerAddr {
 #[derive(Debug, Deserialize)]
 pub struct RepoInfo {
     pub owner: String,
-    pub name: String,
+    pub names: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]

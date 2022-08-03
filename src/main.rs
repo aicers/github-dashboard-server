@@ -7,8 +7,8 @@ mod web;
 use conf::{load_config, parse_socket_addr};
 use database::Database;
 use github::send_github_issue_query;
-use std::env;
 use std::process::exit;
+use std::{env, iter::zip};
 use tokio::{task, time};
 
 const DB_TREE_NAME: &str = "issues";
@@ -68,16 +68,16 @@ async fn main() {
             itv.tick().await;
             match send_github_issue_query(
                 &config.repository.owner,
-                &config.repository.name,
+                &config.repository.names,
                 &config.certification.token,
             )
             .await
             {
-                Ok(resp) => {
-                    if let Err(error) =
-                        db.insert_issues(resp, &config.repository.owner, &config.repository.name)
-                    {
-                        eprintln!("Problem while insert Sled Database. {}", error);
+                Ok(resps) => {
+                    for (name, resp) in zip(&config.repository.names, resps) {
+                        if let Err(error) = db.insert_issues(resp, &config.repository.owner, name) {
+                            eprintln!("Problem while insert Sled Database. {}", error);
+                        }
                     }
                 }
                 Err(error) => {
