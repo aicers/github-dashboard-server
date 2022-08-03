@@ -537,6 +537,7 @@ dependencies = [
  "anyhow",
  "async-graphql",
  "async-graphql-warp",
+ "base64",
  "bincode",
  "graphql_client",
  "regex",
