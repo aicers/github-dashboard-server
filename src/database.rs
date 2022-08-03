@@ -1,5 +1,5 @@
 use crate::{github::GitHubIssue, graphql::Issue};
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use regex::Regex;
 use sled::{Db, Tree};
 
@@ -54,12 +54,18 @@ impl Database {
         Ok(())
     }
 
-    pub fn select_all(&self) -> Result<Vec<Issue>> {
-        let mut all_vec: Vec<Issue> = Vec::new();
+    pub fn select_range(&self, start: usize, end: usize) -> Result<Vec<Issue>> {
+        let mut range_vec: Vec<Issue> = Vec::new();
         let re = Regex::new(r"(?P<owner>\S+)/(?P<name>\S+)#(?P<number>[0-9]+)")?;
-        for (key, val) in self.tree.iter().filter_map(std::result::Result::ok) {
+        for (key, val) in self
+            .tree
+            .iter()
+            .skip(start)
+            .take(end)
+            .filter_map(std::result::Result::ok)
+        {
             match re.captures(String::from_utf8(key.to_vec())?.as_str()) {
-                Some(caps) => all_vec.push(Issue {
+                Some(caps) => range_vec.push(Issue {
                     owner: match caps.name("owner") {
                         Some(x) => String::from(x.as_str()),
                         None => unreachable!(),
@@ -77,7 +83,7 @@ impl Database {
                 None => eprintln!("key doesn't match owner/name#number"),
             }
         }
-        Ok(all_vec)
+        Ok(range_vec)
     }
 
     pub fn insert_issues(&self, resp: Vec<GitHubIssue>, owner: &str, name: &str) -> Result<()> {
@@ -86,5 +92,23 @@ impl Database {
             self.insert(&keystr, &item.title)?;
         }
         Ok(())
+    }
+
+    pub fn issue_tree_len(&self) -> usize {
+        self.tree.len()
+    }
+
+    pub fn get_tree_loc(&self, cursor: &str) -> Result<usize> {
+        for (idx, (key, _)) in self
+            .tree
+            .iter()
+            .filter_map(std::result::Result::ok)
+            .enumerate()
+        {
+            if cursor.eq(&String::from_utf8(key.to_vec())?) {
+                return Ok(idx);
+            }
+        }
+        Err(anyhow!("Cusor Value is not Exist"))
     }
 }
