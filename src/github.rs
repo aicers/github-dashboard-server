@@ -42,27 +42,31 @@ pub struct GitHubIssue {
 
 pub async fn send_github_issue_query(
     owner: &str,
-    name: &str,
+    names: &Vec<String>,
     token: &str,
-) -> Result<Vec<GitHubIssue>> {
-    let variables = open_issues::Variables {
-        owner: owner.to_string(),
-        name: name.to_string(),
-    };
-    let request_body = OpenIssues::build_query(variables);
+) -> Result<Vec<Vec<GitHubIssue>>> {
+    let mut res_vec = Vec::new();
     let client = Client::builder().user_agent(APP_USER_AGENT).build()?;
-    let res = client
-        .post(GITHUB_URL)
-        .bearer_auth(token)
-        .json(&request_body)
-        .send()
-        .await?;
+    for name in names {
+        let variables = open_issues::Variables {
+            owner: owner.to_string(),
+            name: name.to_string(),
+        };
+        let request_body = OpenIssues::build_query(variables);
+        let res = client
+            .post(GITHUB_URL)
+            .bearer_auth(token)
+            .json(&request_body)
+            .send()
+            .await?;
 
-    let respose_body = res.text().await?;
-    let issue_result = serde_json::from_str::<Data>(&respose_body)?
-        .data
-        .repository
-        .issues
-        .nodes;
-    Ok(issue_result)
+        let respose_body = res.text().await?;
+        let issue_result = serde_json::from_str::<Data>(&respose_body)?
+            .data
+            .repository
+            .issues
+            .nodes;
+        res_vec.push(issue_result);
+    }
+    Ok(res_vec)
 }

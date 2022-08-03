@@ -10,7 +10,7 @@ Before running the app, create a toml extension file and write it in the format 
 
  [repository]
  owner = "aicers"
- name = "github-dashboard-server"
+ name = ["github-dashboard-server", "github-dashboard-client"]
 
  [certification]
  token = "github_token_info"
