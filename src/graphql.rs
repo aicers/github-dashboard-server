@@ -18,12 +18,13 @@ pub struct Issue {
     pub title: String,
 }
 
-#[derive(Clone, Copy, Debug)]
-struct Pagination {
-    after_idx: Option<usize>,
-    before_idx: Option<usize>,
-    first: Option<usize>,
-    last: Option<usize>,
+#[derive(Debug)]
+pub enum PagingType {
+    All,
+    First(usize),
+    Last(usize),
+    AfterFirst(String, usize),
+    BeforeLast(String, usize),
 }
 
 impl Display for Issue {
@@ -68,20 +69,11 @@ impl Query {
                         bail!("{:?}", e)
                     }
                 };
-
-                let (after_idx, before_idx) = get_cursor_index(db, after, before)?;
-                let issue_len = db.issue_tree_len();
-                let (start, end) = get_pagination(
-                    Pagination {
-                        after_idx,
-                        before_idx,
-                        first,
-                        last,
-                    },
-                    issue_len,
-                );
-                let issue_vec = db.select_range(start, end)?;
-                Ok(connect_cursor(issue_vec, start, end, issue_len))
+                let p_type = check_paging_type(after, before, first, last)?;
+                let select_vec = db.select_range(p_type)?;
+                let (prev, next) =
+                    check_prev_next_exist(db, select_vec.first(), select_vec.last())?;
+                Ok(connect_cursor(select_vec, prev, next))
             },
         )
         .await
@@ -93,10 +85,9 @@ impl Query {
 }
 
 fn connect_cursor<T>(
-    mut db_vec: Vec<T>,
-    start: usize,
-    end: usize,
-    len: usize,
+    select_vec: Vec<T>,
+    prev: bool,
+    next: bool,
 ) -> Connection<String, T, EmptyFields, EmptyFields, GithubConnectionName, GithubEdgeName>
 where
     T: OutputType + Display,
@@ -108,45 +99,58 @@ where
         EmptyFields,
         GithubConnectionName,
         GithubEdgeName,
-    > = Connection::new(start > 0, end < len);
-    for _ in start..end {
-        let issue = db_vec.remove(0);
+    > = Connection::new(prev, next);
+    for output in select_vec {
         connection
             .edges
-            .push(Edge::new(base64::encode(format!("{}", issue)), issue));
+            .push(Edge::new(base64::encode(format!("{}", output)), output));
     }
     connection
 }
 
-fn get_pagination(pg: Pagination, len: usize) -> (usize, usize) {
-    let mut start = pg.after_idx.map_or(0, |after| after + 1);
-    let mut end = pg.before_idx.unwrap_or(len);
-    if let Some(first) = pg.first {
-        end = (start + first).min(end);
+fn check_prev_next_exist<T>(
+    db: &Database,
+    prev: Option<&T>,
+    next: Option<&T>,
+) -> Result<(bool, bool)>
+where
+    T: OutputType + Display,
+{
+    if let Some(prev_val) = prev {
+        if let Some(next_val) = next {
+            return Ok((
+                db.get_prev_exist(format!("{}", prev_val))?,
+                db.get_next_exist(format!("{}", next_val))?,
+            ));
+        }
     }
-    if let Some(last) = pg.last {
-        start = if last > end - start { end } else { end - last };
-    }
-    (start, end)
+    Err(anyhow!("Wrong Isseu value"))
 }
 
-fn get_cursor_index(
-    db: &Database,
+fn check_paging_type(
     after: Option<String>,
     before: Option<String>,
-) -> Result<(Option<usize>, Option<usize>)> {
-    let mut after_idx: Option<usize> = None;
-    let mut before_idx: Option<usize> = None;
-    if let Some(cursor) = after {
-        if let Ok(ret) = db.get_tree_loc(&String::from_utf8(base64::decode(cursor)?)?) {
-            after_idx = Some(ret);
+    first: Option<usize>,
+    last: Option<usize>,
+) -> Result<PagingType> {
+    if let Some(f_val) = first {
+        if let Some(cursor) = after {
+            return Ok(PagingType::AfterFirst(
+                String::from_utf8(base64::decode(cursor)?)?,
+                f_val,
+            ));
         }
-    } else if let Some(cursor) = before {
-        if let Ok(ret) = db.get_tree_loc(&String::from_utf8(base64::decode(cursor)?)?) {
-            before_idx = Some(ret);
+        return Ok(PagingType::First(f_val));
+    } else if let Some(l_val) = last {
+        if let Some(cursor) = before {
+            return Ok(PagingType::BeforeLast(
+                String::from_utf8(base64::decode(cursor)?)?,
+                l_val,
+            ));
         }
+        return Ok(PagingType::Last(l_val));
     }
-    Ok((after_idx, before_idx))
+    Ok(PagingType::All)
 }
 
 pub fn schema(database: Database) -> Schema<Query, EmptyMutation, EmptySubscription> {
