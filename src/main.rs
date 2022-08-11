@@ -4,15 +4,21 @@ mod github;
 mod graphql;
 mod web;
 
+use crate::conf::PKG_NAME;
 use conf::{load_config, parse_socket_addr};
 use database::Database;
+use directories::ProjectDirs;
 use github::send_github_issue_query;
+use std::path::PathBuf;
 use std::process::exit;
 use std::{env, iter::zip};
 use tokio::{task, time};
 
 const DB_TREE_NAME: &str = "issues";
+const DEFAULT_CONFIG: &str = "config.toml";
 const ONE_HOUR: u64 = 60 * 60;
+const ORGANIZATION: &str = "einsis";
+const QUALIFIER: &str = "com";
 
 #[tokio::main]
 async fn main() {
@@ -30,14 +36,19 @@ async fn main() {
                 println!("{}", conf::USG);
                 exit(0);
             }
-            _ => args_val,
+            _ => PathBuf::from(args_val),
         }
+    } else if let Some(proj_dirs) = ProjectDirs::from(QUALIFIER, ORGANIZATION, PKG_NAME) {
+        proj_dirs.config_dir().join(DEFAULT_CONFIG)
     } else {
-        eprintln!("No file name given. Refer to usage. \n{}", conf::USG);
+        eprintln!(
+            "No valid home directory path. Refer to usage. \n{}",
+            conf::USG
+        );
         exit(1);
     };
 
-    let config = match load_config(path.as_ref()) {
+    let config = match load_config(&path) {
         Ok(ret) => ret,
         Err(error) => {
             eprintln!("Problem while loading config. {}", error);

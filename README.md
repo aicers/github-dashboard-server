@@ -28,10 +28,16 @@ Before running the app, create a toml extension file and write it in the format 
 Build and serve the app with Cargo as follows:
 
 ```sh
-cargo run -- [config_file]
+cargo run [-- FLAGS | OPTION]
 ```
 
-* `config_file`: Toml extension file name including path.
+When you run the program, server reads the config file from the default folder.
+
+To run without giving the config file option, save the file to the path below.
+
+```sh
+"/Users/[username]/Library/Application Support/com.einsis.github-dashboard-server/config.toml"
+```
 
 The web server will run using the address value in the config file.
 
@@ -43,3 +49,7 @@ Connect to `http://localhost:8080` in your browser to run the app,
 
 * `-h`, `--help`: Prints help information
 * `-V`, `--version`: Prints version information
+
+## OPTION
+
+* `config_file`: The path to the toml file containing server config info.
