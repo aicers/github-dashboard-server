@@ -1,0 +1,14 @@
+query PullRequests($owner: String!, $name:String!, $first:Int, $last:Int, $before:String, $after:String) {
+  repository(owner: $owner name: $name) {
+    pullRequests(first: $first last: $last before: $before after: $after) {
+      pageInfo {
+        hasNextPage,
+        endCursor,
+      }
+      nodes {
+        number,
+        title,
+      }
+    }
+  }
+}

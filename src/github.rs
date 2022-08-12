@@ -15,8 +15,21 @@ const APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PK
 )]
 pub struct OpenIssues;
 
+#[derive(GraphQLQuery)]
+#[graphql(
+    schema_path = "src/github_schema.graphql",
+    query_path = "src/pull_requests.graphql"
+)]
+pub struct PullRequests;
+
 #[derive(Debug)]
 pub struct GitHubIssue {
+    pub number: i64,
+    pub title: String,
+}
+
+#[derive(Debug)]
+pub struct GitHubPRs {
     pub number: i64,
     pub title: String,
 }
@@ -39,10 +52,8 @@ pub async fn send_github_issue_query(
                 before: None,
                 after: end_cur,
             };
-
             let resp_body: GraphQlResponse<open_issues::ResponseData> =
-                send_qeury::<OpenIssues>(token, var).await?.json().await?;
-
+                send_query::<OpenIssues>(token, var).await?.json().await?;
             if let Some(data) = resp_body.data {
                 if let Some(repository) = data.repository {
                     if let Some(nodes) = repository.issues.nodes.as_ref() {
@@ -67,6 +78,51 @@ pub async fn send_github_issue_query(
     Ok(total_issue)
 }
 
+pub async fn send_github_pr_query(
+    owner: &str,
+    names: &Vec<String>,
+    token: &str,
+) -> Result<Vec<Vec<GitHubPRs>>> {
+    let mut total_prs = Vec::new();
+    for name in names {
+        let mut end_cur: Option<String> = None;
+        let mut prs: Vec<GitHubPRs> = Vec::new();
+        loop {
+            let var = pull_requests::Variables {
+                owner: owner.to_string(),
+                name: name.to_string(),
+                first: Some(GITHUB_FETCH_SIZE),
+                last: None,
+                before: None,
+                after: end_cur,
+            };
+
+            let resp_body: GraphQlResponse<pull_requests::ResponseData> =
+                send_query::<PullRequests>(token, var).await?.json().await?;
+            if let Some(data) = resp_body.data {
+                if let Some(repository) = data.repository {
+                    if let Some(nodes) = repository.pull_requests.nodes.as_ref() {
+                        for pr in nodes.iter().flatten() {
+                            prs.push(GitHubPRs {
+                                number: pr.number,
+                                title: pr.title.to_string(),
+                            });
+                        }
+                        if !repository.pull_requests.page_info.has_next_page {
+                            total_prs.push(prs);
+                            break;
+                        }
+                        end_cur = repository.pull_requests.page_info.end_cursor;
+                        continue;
+                    }
+                }
+            }
+            bail!("Failed to parse response data");
+        }
+    }
+    Ok(total_prs)
+}
+
 fn request<V>(request_body: &QueryBody<V>, token: &str) -> Result<RequestBuilder>
 where
     V: Serialize,
@@ -79,7 +135,7 @@ where
     Ok(client)
 }
 
-async fn send_qeury<T>(token: &str, var: T::Variables) -> Result<Response>
+async fn send_query<T>(token: &str, var: T::Variables) -> Result<Response>
 where
     T: GraphQLQuery,
 {

@@ -2,8 +2,8 @@ query OpenIssues($owner: String!, $name:String!, $first:Int, $last:Int, $before:
   repository(owner: $owner name: $name) {
     issues(first: $first last: $last before: $before after: $after) {
       pageInfo {
-          hasNextPage,
-          endCursor,
+        hasNextPage,
+        endCursor,
       }
       nodes {
         number,
