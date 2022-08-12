@@ -1,17 +1,24 @@
-use crate::database::Database;
+use crate::{database::Database, ISSUE_TREE_NAME, PR_TREE_NAME};
 use anyhow::{anyhow, bail, Result};
 use async_graphql::{
-    types::connection::{query, Connection, ConnectionNameType, Edge, EdgeNameType, EmptyFields},
+    types::connection::{query, Connection, Edge, EmptyFields},
     Context, EmptyMutation, EmptySubscription, Object, OutputType, Schema, SimpleObject,
 };
+use sled::Tree;
 use std::fmt::Display;
 
 pub struct Query;
-pub struct GithubConnectionName;
-pub struct GithubEdgeName;
 
 #[derive(Debug, SimpleObject)]
 pub struct Issue {
+    pub owner: String,
+    pub repo: String,
+    pub number: i32,
+    pub title: String,
+}
+
+#[derive(Debug, SimpleObject)]
+pub struct PullRequest {
     pub owner: String,
     pub repo: String,
     pub number: i32,
@@ -33,15 +40,9 @@ impl Display for Issue {
     }
 }
 
-impl ConnectionNameType for GithubConnectionName {
-    fn type_name<T: OutputType>() -> String {
-        "GithubConnection".to_string()
-    }
-}
-
-impl EdgeNameType for GithubEdgeName {
-    fn type_name<T: OutputType>() -> String {
-        "GithubEdge".to_string()
+impl Display for PullRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}/{}#{}", self.owner, self.repo, self.number)
     }
 }
 
@@ -54,9 +55,7 @@ impl Query {
         before: Option<String>,
         first: Option<i32>,
         last: Option<i32>,
-    ) -> Result<
-        Connection<String, Issue, EmptyFields, EmptyFields, GithubConnectionName, GithubEdgeName>,
-    > {
+    ) -> Result<Connection<String, Issue, EmptyFields, EmptyFields>> {
         match query(
             after,
             before,
@@ -65,14 +64,55 @@ impl Query {
             |after, before, first, last| async move {
                 let db = match ctx.data::<Database>() {
                     Ok(ret) => ret,
-                    Err(e) => {
-                        bail!("{:?}", e)
-                    }
+                    Err(e) => bail!("{:?}", e),
+                };
+                let tree = match db.tree(ISSUE_TREE_NAME) {
+                    Ok(ret) => ret,
+                    Err(e) => bail!("{:?}", e),
                 };
                 let p_type = check_paging_type(after, before, first, last)?;
-                let select_vec = db.select_range(p_type)?;
+                let select_vec = Database::select_issue_range(p_type, tree)?;
                 let (prev, next) =
-                    check_prev_next_exist(db, select_vec.first(), select_vec.last())?;
+                    check_prev_next_exist(select_vec.first(), select_vec.last(), tree)?;
+                Ok(connect_cursor(select_vec, prev, next))
+            },
+        )
+        .await
+        {
+            Ok(conn) => Ok(conn),
+            Err(e) => Err(anyhow!("{:?}", e)),
+        }
+    }
+
+    #[allow(non_snake_case)]
+    pub async fn pullRequests<'ctx>(
+        &self,
+        ctx: &Context<'ctx>,
+        after: Option<String>,
+        before: Option<String>,
+        first: Option<i32>,
+        last: Option<i32>,
+    ) -> Result<Connection<String, PullRequest, EmptyFields, EmptyFields>> {
+        match query(
+            after,
+            before,
+            first,
+            last,
+            |after, before, first, last| async move {
+                let db = match ctx.data::<Database>() {
+                    Ok(ret) => ret,
+                    Err(e) => bail!("{:?}", e),
+                };
+
+                let tree = match db.tree(PR_TREE_NAME) {
+                    Ok(ret) => ret,
+                    Err(e) => bail!("{:?}", e),
+                };
+
+                let p_type = check_paging_type(after, before, first, last)?;
+                let select_vec = Database::select_pr_range(p_type, tree)?;
+                let (prev, next) =
+                    check_prev_next_exist(select_vec.first(), select_vec.last(), tree)?;
                 Ok(connect_cursor(select_vec, prev, next))
             },
         )
@@ -88,18 +128,12 @@ fn connect_cursor<T>(
     select_vec: Vec<T>,
     prev: bool,
     next: bool,
-) -> Connection<String, T, EmptyFields, EmptyFields, GithubConnectionName, GithubEdgeName>
+) -> Connection<String, T, EmptyFields, EmptyFields>
 where
     T: OutputType + Display,
 {
-    let mut connection: Connection<
-        String,
-        T,
-        EmptyFields,
-        EmptyFields,
-        GithubConnectionName,
-        GithubEdgeName,
-    > = Connection::new(prev, next);
+    let mut connection: Connection<String, T, EmptyFields, EmptyFields> =
+        Connection::new(prev, next);
     for output in select_vec {
         connection
             .edges
@@ -108,23 +142,19 @@ where
     connection
 }
 
-fn check_prev_next_exist<T>(
-    db: &Database,
-    prev: Option<&T>,
-    next: Option<&T>,
-) -> Result<(bool, bool)>
+fn check_prev_next_exist<T>(prev: Option<&T>, next: Option<&T>, tree: &Tree) -> Result<(bool, bool)>
 where
     T: OutputType + Display,
 {
     if let Some(prev_val) = prev {
         if let Some(next_val) = next {
             return Ok((
-                db.get_prev_exist(format!("{}", prev_val))?,
-                db.get_next_exist(format!("{}", next_val))?,
+                Database::get_prev_exist(format!("{}", prev_val), tree)?,
+                Database::get_next_exist(format!("{}", next_val), tree)?,
             ));
         }
     }
-    Err(anyhow!("Wrong Isseu value"))
+    Err(anyhow!("Wrong Issue value"))
 }
 
 fn check_paging_type(
