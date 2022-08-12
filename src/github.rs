@@ -1,8 +1,9 @@
-use anyhow::Result;
-use graphql_client::GraphQLQuery;
-use reqwest::Client;
-use serde::{Deserialize, Serialize};
+use anyhow::{bail, Result};
+use graphql_client::{GraphQLQuery, QueryBody, Response as GraphQlResponse};
+use reqwest::{Client, RequestBuilder, Response};
+use serde::Serialize;
 
+const GITHUB_FETCH_SIZE: i64 = 10;
 const GITHUB_URL: &str = "https://api.github.com/graphql";
 const APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
 
@@ -14,29 +15,9 @@ const APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PK
 )]
 pub struct OpenIssues;
 
-#[derive(Debug, Deserialize, Serialize)]
-pub struct Data {
-    data: Repository,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-pub struct Repository {
-    repository: Issues,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-pub struct Issues {
-    issues: Nodes,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-pub struct Nodes {
-    nodes: Vec<GitHubIssue>,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug)]
 pub struct GitHubIssue {
-    pub number: i32,
+    pub number: i64,
     pub title: String,
 }
 
@@ -45,28 +26,62 @@ pub async fn send_github_issue_query(
     names: &Vec<String>,
     token: &str,
 ) -> Result<Vec<Vec<GitHubIssue>>> {
-    let mut res_vec = Vec::new();
-    let client = Client::builder().user_agent(APP_USER_AGENT).build()?;
+    let mut total_issue = Vec::new();
     for name in names {
-        let variables = open_issues::Variables {
-            owner: owner.to_string(),
-            name: name.to_string(),
-        };
-        let request_body = OpenIssues::build_query(variables);
-        let res = client
-            .post(GITHUB_URL)
-            .bearer_auth(token)
-            .json(&request_body)
-            .send()
-            .await?;
+        let mut end_cur: Option<String> = None;
+        let mut issues: Vec<GitHubIssue> = Vec::new();
+        loop {
+            let var = open_issues::Variables {
+                owner: owner.to_string(),
+                name: name.to_string(),
+                first: Some(GITHUB_FETCH_SIZE),
+                last: None,
+                before: None,
+                after: end_cur,
+            };
 
-        let respose_body = res.text().await?;
-        let issue_result = serde_json::from_str::<Data>(&respose_body)?
-            .data
-            .repository
-            .issues
-            .nodes;
-        res_vec.push(issue_result);
+            let resp_body: GraphQlResponse<open_issues::ResponseData> =
+                send_qeury::<OpenIssues>(token, var).await?.json().await?;
+
+            if let Some(data) = resp_body.data {
+                if let Some(repository) = data.repository {
+                    if let Some(nodes) = repository.issues.nodes.as_ref() {
+                        for issue in nodes.iter().flatten() {
+                            issues.push(GitHubIssue {
+                                number: issue.number,
+                                title: issue.title.to_string(),
+                            });
+                        }
+                        if !repository.issues.page_info.has_next_page {
+                            total_issue.push(issues);
+                            break;
+                        }
+                        end_cur = repository.issues.page_info.end_cursor;
+                        continue;
+                    }
+                }
+            }
+            bail!("Failed to parse response data");
+        }
     }
-    Ok(res_vec)
+    Ok(total_issue)
+}
+
+fn request<V>(request_body: &QueryBody<V>, token: &str) -> Result<RequestBuilder>
+where
+    V: Serialize,
+{
+    let client = Client::builder().user_agent(APP_USER_AGENT).build()?;
+    let client = client
+        .post(GITHUB_URL)
+        .bearer_auth(token)
+        .json(&request_body);
+    Ok(client)
+}
+
+async fn send_qeury<T>(token: &str, var: T::Variables) -> Result<Response>
+where
+    T: GraphQLQuery,
+{
+    Ok(request(&T::build_query(var), token)?.send().await?)
 }
