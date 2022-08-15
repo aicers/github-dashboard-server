@@ -1,6 +1,7 @@
 mod conf;
 mod database;
 mod github;
+mod google;
 mod graphql;
 mod web;
 
@@ -9,6 +10,7 @@ use conf::{load_config, parse_socket_addr};
 use database::Database;
 use directories::ProjectDirs;
 use github::{send_github_issue_query, send_github_pr_query};
+use google::check_key;
 use std::path::PathBuf;
 use std::process::exit;
 use std::{env, iter::zip};
@@ -74,6 +76,15 @@ async fn main() {
     };
     let db = database.clone();
 
+    match check_key(&database.clone()).await {
+        Ok(_ret) => {
+            eprint!("Check successful");
+        }
+        Err(error) => {
+            eprintln!("Problem while checking for public Google key. {}", error);
+            exit(1);
+        }
+    };
     task::spawn(async move {
         let mut itv = time::interval(time::Duration::from_secs(ONE_HOUR));
         loop {
