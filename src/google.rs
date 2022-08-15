@@ -14,7 +14,9 @@ pub async fn check_key(db: &Database) -> Result<bool> {
             let current_key = db.select("google_key");
             match (response_body, current_key) {
                 (Ok(body), Ok(value)) => {
-                    if body != value {
+                    if body == value {
+                        Ok(true)
+                    } else {
                         let remove_key = db.delete("google_key");
                         let insert_key = db.insert("google_key", &body);
                         match (remove_key, insert_key) {
@@ -29,8 +31,6 @@ pub async fn check_key(db: &Database) -> Result<bool> {
                             }
                             (Err(_), Err(_)) => bail!("Problem switching Google key"),
                         }
-                    } else {
-                        Ok(true)
                     }
                 }
                 (Err(_), Ok(_)) => {
