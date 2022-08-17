@@ -37,95 +37,93 @@ pub struct GitHubPRs {
 
 pub async fn send_github_issue_query(
     owner: &str,
-    names: &Vec<String>,
+    name: &str,
     token: &str,
 ) -> Result<Vec<Vec<GitHubIssue>>> {
     let mut total_issue = Vec::new();
-    for name in names {
-        let mut end_cur: Option<String> = None;
-        let mut issues: Vec<GitHubIssue> = Vec::new();
-        loop {
-            let var = open_issues::Variables {
-                owner: owner.to_string(),
-                name: name.to_string(),
-                first: Some(GITHUB_FETCH_SIZE),
-                last: None,
-                before: None,
-                after: end_cur,
-            };
-            let resp_body: GraphQlResponse<open_issues::ResponseData> =
-                send_query::<OpenIssues>(token, var).await?.json().await?;
-            if let Some(data) = resp_body.data {
-                if let Some(repository) = data.repository {
-                    if let Some(nodes) = repository.issues.nodes.as_ref() {
-                        for issue in nodes.iter().flatten() {
-                            issues.push(GitHubIssue {
-                                number: issue.number,
-                                title: issue.title.to_string(),
-                            });
-                        }
-                        if !repository.issues.page_info.has_next_page {
-                            total_issue.push(issues);
-                            break;
-                        }
-                        end_cur = repository.issues.page_info.end_cursor;
-                        continue;
+    let mut end_cur: Option<String> = None;
+    let mut issues: Vec<GitHubIssue> = Vec::new();
+    loop {
+        let var = open_issues::Variables {
+            owner: owner.to_string(),
+            name: name.to_string(),
+            first: Some(GITHUB_FETCH_SIZE),
+            last: None,
+            before: None,
+            after: end_cur,
+        };
+        let resp_body: GraphQlResponse<open_issues::ResponseData> =
+            send_query::<OpenIssues>(token, var).await?.json().await?;
+        if let Some(data) = resp_body.data {
+            if let Some(repository) = data.repository {
+                if let Some(nodes) = repository.issues.nodes.as_ref() {
+                    for issue in nodes.iter().flatten() {
+                        issues.push(GitHubIssue {
+                            number: issue.number,
+                            title: issue.title.to_string(),
+                        });
                     }
+                    if !repository.issues.page_info.has_next_page {
+                        total_issue.push(issues);
+                        break;
+                    }
+                    end_cur = repository.issues.page_info.end_cursor;
+                    continue;
                 }
             }
-            bail!("Failed to parse response data");
         }
+        bail!("Failed to parse response data");
     }
     Ok(total_issue)
 }
 
 pub async fn send_github_pr_query(
     owner: &str,
-    names: &Vec<String>,
+    name: &str,
     token: &str,
 ) -> Result<Vec<Vec<GitHubPRs>>> {
     let mut total_prs = Vec::new();
-    for name in names {
-        let mut end_cur: Option<String> = None;
-        let mut prs: Vec<GitHubPRs> = Vec::new();
-        loop {
-            let var = pull_requests::Variables {
-                owner: owner.to_string(),
-                name: name.to_string(),
-                first: Some(GITHUB_FETCH_SIZE),
-                last: None,
-                before: None,
-                after: end_cur,
-            };
+    let mut end_cur: Option<String> = None;
+    let mut prs: Vec<GitHubPRs> = Vec::new();
+    loop {
+        let var = pull_requests::Variables {
+            owner: owner.to_string(),
+            name: name.to_string(),
+            first: Some(GITHUB_FETCH_SIZE),
+            last: None,
+            before: None,
+            after: end_cur,
+        };
 
-            let resp_body: GraphQlResponse<pull_requests::ResponseData> =
-                send_query::<PullRequests>(token, var).await?.json().await?;
-            if let Some(data) = resp_body.data {
-                if let Some(repository) = data.repository {
-                    if let Some(nodes) = repository.pull_requests.nodes.as_ref() {
-                        for pr in nodes.iter().flatten() {
-                            let mut assignees: Vec<String> = Vec::new();
-                            let assignees_nodes = pr.assignees.nodes.as_ref().unwrap();
-                            for pr_assignees in assignees_nodes.iter().flatten() {
-                                assignees.push(pr_assignees.login.clone());
-                            }
-                            prs.push(GitHubPRs {
-                                number: pr.number,
-                                title: pr.title.to_string(),
-                                assignees,
-                            });
+        let resp_body: GraphQlResponse<pull_requests::ResponseData> =
+            send_query::<PullRequests>(token, var).await?.json().await?;
+        if let Some(data) = resp_body.data {
+            if let Some(repository) = data.repository {
+                if let Some(nodes) = repository.pull_requests.nodes.as_ref() {
+                    for pr in nodes.iter().flatten() {
+                        let mut assignees: Vec<String> = Vec::new();
+                        let assignees_nodes = pr.assignees.nodes.as_ref().unwrap();
+                        for pr_assignees in assignees_nodes.iter().flatten() {
+                            assignees.push(pr_assignees.login.clone());
                         }
-                        if !repository.pull_requests.page_info.has_next_page {
-                            total_prs.push(prs);
-                            break;
-                        }
-                        end_cur = repository.pull_requests.page_info.end_cursor;
-                        continue;
+                        prs.push(GitHubPRs {
+                            number: pr.number,
+                            title: pr.title.to_string(),
+                            assignees,
+                        });
                     }
+                    if !repository.pull_requests.page_info.has_next_page {
+                        total_prs.push(prs);
+                        break;
+                    }
+                    end_cur = repository.pull_requests.page_info.end_cursor;
+                    continue;
                 }
+                end_cur = repository.pull_requests.page_info.end_cursor;
+                continue;
             }
-            bail!("Failed to parse response data");
         }
+        bail!("Failed to parse response data");
     }
     Ok(total_prs)
 }
