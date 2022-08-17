@@ -14,7 +14,7 @@ pub struct ServerAddr {
 #[derive(Debug, Deserialize)]
 pub struct RepoInfo {
     pub owner: String,
-    pub names: Vec<String>,
+    pub name: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -30,7 +30,7 @@ pub struct Database {
 #[derive(Debug, Deserialize)]
 pub struct Config {
     pub web: ServerAddr,
-    pub repository: RepoInfo,
+    pub repositories: Vec<RepoInfo>,
     pub certification: Certification,
     pub database: Database,
 }

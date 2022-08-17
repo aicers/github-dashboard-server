@@ -11,9 +11,9 @@ use database::Database;
 use directories::ProjectDirs;
 use github::{send_github_issue_query, send_github_pr_query};
 use google::check_key;
+use std::env;
 use std::path::PathBuf;
 use std::process::exit;
-use std::{env, iter::zip};
 use tokio::{task, time};
 
 const DEFAULT_CONFIG: &str = "config.toml";
@@ -23,6 +23,7 @@ const ONE_HOUR: u64 = 60 * 60;
 const ORGANIZATION: &str = "einsis";
 const QUALIFIER: &str = "com";
 
+#[allow(clippy::too_many_lines)]
 #[tokio::main]
 async fn main() {
     println!("AICE GitHub Dashboard Server");
@@ -87,44 +88,50 @@ async fn main() {
         let mut itv = time::interval(time::Duration::from_secs(ONE_HOUR));
         loop {
             itv.tick().await;
-            match send_github_issue_query(
-                &config.repository.owner,
-                &config.repository.names,
-                &config.certification.token,
-            )
-            .await
-            {
-                Ok(resps) => {
-                    for (name, resp) in zip(&config.repository.names, resps) {
-                        if let Err(error) = db.insert_issues(resp, &config.repository.owner, name) {
-                            eprintln!("Problem while insert Sled Database. {}", error);
+            for repoinfo in &config.repositories {
+                match send_github_issue_query(
+                    &repoinfo.owner,
+                    &repoinfo.name,
+                    &config.certification.token,
+                )
+                .await
+                {
+                    Ok(resps) => {
+                        for resp in resps {
+                            if let Err(error) =
+                                db.insert_issues(resp, &repoinfo.owner, &repoinfo.name)
+                            {
+                                eprintln!("Problem while insert Sled Database. {}", error);
+                            }
                         }
                     }
-                }
-                Err(error) => {
-                    eprintln!("Problem while sending github query. {}", error);
-                }
-            }
-            match send_github_pr_query(
-                &config.repository.owner,
-                &config.repository.names,
-                &config.certification.token,
-            )
-            .await
-            {
-                Ok(resps) => {
-                    for (name, resp) in zip(&config.repository.names, resps) {
-                        if let Err(error) = db.insert_prs(resp, &config.repository.owner, name) {
-                            eprintln!("Problem while insert Sled Database. {}", error);
-                        }
+                    Err(error) => {
+                        eprintln!("Problem while sending github query. {}", error);
                     }
                 }
-                Err(error) => {
-                    eprintln!("Problem while sending github query. {}", error);
+                match send_github_pr_query(
+                    &repoinfo.owner,
+                    &repoinfo.name,
+                    &config.certification.token,
+                )
+                .await
+                {
+                    Ok(resps) => {
+                        for resp in resps {
+                            if let Err(error) = db.insert_prs(resp, &repoinfo.owner, &repoinfo.name)
+                            {
+                                eprintln!("Problem while insert Sled Database. {}", error);
+                            }
+                        }
+                    }
+                    Err(error) => {
+                        eprintln!("Problem while sending github query. {}", error);
+                    }
                 }
             }
         }
     });
+
     let schema = graphql::schema(database);
     web::serve(schema, socket_addr).await;
 }
