@@ -8,6 +8,11 @@ query PullRequests($owner: String!, $name:String!, $first:Int, $last:Int, $befor
       nodes {
         number,
         title,
+        assignees(last: 15) {
+          nodes {
+            login
+          }
+        }
       }
     }
   }
