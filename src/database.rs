@@ -5,6 +5,7 @@ use crate::{
 };
 use anyhow::{anyhow, bail, Result};
 use regex::Regex;
+use serde::Serialize;
 use sled::{Db, IVec, Tree};
 
 #[derive(Clone)]
@@ -36,7 +37,7 @@ impl Database {
         })
     }
 
-    fn insert(key: &str, val: &str, tree: &Tree) -> Result<()> {
+    fn insert<T: Serialize>(key: &str, val: T, tree: &Tree) -> Result<()> {
         tree.insert(key, bincode::serialize(&val)?)?;
         Ok(())
     }
@@ -76,7 +77,7 @@ impl Database {
     pub fn insert_prs(&self, resp: Vec<GitHubPRs>, owner: &str, name: &str) -> Result<()> {
         for item in resp {
             let keystr: String = format!("{}/{}#{}", owner, name, item.number);
-            Database::insert(&keystr, &item.title, &self.pr_tree)?;
+            Database::insert(&keystr, (&item.title, &item.assignees), &self.pr_tree)?;
         }
         Ok(())
     }
