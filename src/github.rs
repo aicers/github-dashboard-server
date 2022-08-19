@@ -32,6 +32,7 @@ pub struct GitHubIssue {
 pub struct GitHubPRs {
     pub number: i64,
     pub title: String,
+    pub assignees: Vec<String>,
 }
 
 pub async fn send_github_issue_query(
@@ -103,9 +104,15 @@ pub async fn send_github_pr_query(
                 if let Some(repository) = data.repository {
                     if let Some(nodes) = repository.pull_requests.nodes.as_ref() {
                         for pr in nodes.iter().flatten() {
+                            let mut assignees: Vec<String> = Vec::new();
+                            let assignees_nodes = pr.assignees.nodes.as_ref().unwrap();
+                            for pr_assignees in assignees_nodes.iter().flatten() {
+                                assignees.push(pr_assignees.login.clone());
+                            }
                             prs.push(GitHubPRs {
                                 number: pr.number,
                                 title: pr.title.to_string(),
+                                assignees,
                             });
                         }
                         if !repository.pull_requests.page_info.has_next_page {
