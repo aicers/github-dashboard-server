@@ -77,9 +77,7 @@ async fn main() {
     let db = database.clone();
 
     match check_key(&database.clone()).await {
-        Ok(_ret) => {
-            eprint!("Check successful");
-        }
+        Ok(ret) => ret,
         Err(error) => {
             eprintln!("Problem while checking for public Google key. {}", error);
             exit(1);

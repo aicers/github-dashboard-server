@@ -11,14 +11,15 @@ pub async fn check_key(db: &Database) -> Result<bool> {
     match result {
         Ok(response) => {
             let response_body = response.text().await;
-            let current_key = db.select("google_key");
+            let current_key = db.select_db("google_key");
             match (response_body, current_key) {
                 (Ok(body), Ok(value)) => {
+                    eprintln!("Found key");
                     if body == value {
                         Ok(true)
                     } else {
-                        let remove_key = db.delete("google_key");
-                        let insert_key = db.insert("google_key", &body);
+                        let remove_key = db.delete_db("google_key");
+                        let insert_key = db.insert_db("google_key", &body);
                         match (remove_key, insert_key) {
                             (Ok(_), Ok(_)) => Ok(true),
                             (Ok(_), Err(err)) => {
@@ -37,7 +38,8 @@ pub async fn check_key(db: &Database) -> Result<bool> {
                     bail!("Problem with getting a response")
                 }
                 (Ok(body), Err(_)) => {
-                    let insert_key = db.insert("google_key", &body);
+                    eprintln!("Insert new key");
+                    let insert_key = db.insert_db("google_key", &body);
                     match insert_key {
                         Ok(_) => Ok(true),
                         Err(err) => Err(err),

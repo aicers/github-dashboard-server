@@ -50,6 +50,23 @@ impl Database {
         }
         bail!("Failed to get tree value");
     }
+    #[allow(unused)]
+    pub fn select_db(&self, key: &str) -> Result<String> {
+        if let Ok(Some(val)) = self.db.get(key) {
+            let result: String = bincode::deserialize(&val)?;
+            return Ok(result);
+        }
+        bail!("Failed to get db value");
+    }
+
+    #[allow(unused)]
+    pub fn delete_db(&self, key: &str) -> Result<String> {
+        if let Ok(Some(val)) = self.db.remove(key) {
+            let result: String = bincode::deserialize(&val)?;
+            return Ok(result);
+        }
+        bail!("Failed to remove tree value");
+    }
 
     #[allow(unused)]
     pub fn delete(key: &str, tree: &Tree) -> Result<String> {
