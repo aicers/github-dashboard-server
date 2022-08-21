@@ -14,7 +14,6 @@ pub async fn check_key(db: &Database) -> Result<bool> {
             let current_key = db.select_db("google_key");
             match (response_body, current_key) {
                 (Ok(body), Ok(value)) => {
-                    eprintln!("Found key");
                     if body == value {
                         Ok(true)
                     } else {
@@ -38,7 +37,6 @@ pub async fn check_key(db: &Database) -> Result<bool> {
                     bail!("Problem with getting a response")
                 }
                 (Ok(body), Err(_)) => {
-                    eprintln!("Insert new key");
                     let insert_key = db.insert_db("google_key", &body);
                     match insert_key {
                         Ok(_) => Ok(true),

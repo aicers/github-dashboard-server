@@ -50,6 +50,7 @@ impl Database {
         }
         bail!("Failed to get tree value");
     }
+
     #[allow(unused)]
     pub fn select_db(&self, key: &str) -> Result<String> {
         if let Ok(Some(val)) = self.db.get(key) {
