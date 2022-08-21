@@ -52,6 +52,12 @@ impl Database {
     }
 
     #[allow(unused)]
+    pub fn insert_db<T: Serialize>(&self, key: &str, val: T) -> Result<()> {
+        self.db.insert(key, bincode::serialize(&val)?)?;
+        Ok(())
+    }
+
+    #[allow(unused)]
     pub fn select_db(&self, key: &str) -> Result<String> {
         if let Ok(Some(val)) = self.db.get(key) {
             let result: String = bincode::deserialize(&val)?;
