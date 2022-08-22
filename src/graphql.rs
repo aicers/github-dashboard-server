@@ -23,6 +23,7 @@ pub struct PullRequest {
     pub repo: String,
     pub number: i32,
     pub title: String,
+    pub assignees: Vec<String>,
 }
 
 #[derive(Debug)]

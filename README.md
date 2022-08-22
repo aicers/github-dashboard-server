@@ -6,7 +6,7 @@ Before running the app, create a toml extension file and write it in the format 
 
 ```toml
  [web]
- address = "127.0.0.1:8080"
+ address = "127.0.0.1:8000"
 
  [[repositories]]
  owner = "aicers"
@@ -45,9 +45,9 @@ To run without giving the config file option, save the file to the path below.
 
 The web server will run using the address value in the config file.
 
-Connect to `http://localhost:8080` in your browser to run the app,
+Connect to `http://localhost:8000` in your browser to run the app,
 
-* `http://localhost:8080/graphql/playground` to playground
+* `http://localhost:8000/graphql/playground` to playground
 
 ## FLAGS
 
