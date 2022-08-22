@@ -258,21 +258,26 @@ fn get_pr_list(re: &Regex, range_list: Vec<(IVec, IVec)>) -> Result<Vec<PullRequ
 
     for (key, val) in range_list {
         match re.captures(String::from_utf8(key.to_vec())?.as_str()) {
-            Some(caps) => pr_list.push(PullRequest {
-                owner: match caps.name("owner") {
-                    Some(x) => String::from(x.as_str()),
-                    None => unreachable!(),
-                },
-                repo: match caps.name("name") {
-                    Some(x) => String::from(x.as_str()),
-                    None => unreachable!(),
-                },
-                number: match caps.name("number") {
-                    Some(x) => x.as_str().trim().parse::<i32>()?,
-                    None => unreachable!(),
-                },
-                title: bincode::deserialize::<String>(&val)?,
-            }),
+            Some(caps) => {
+                let (title, assignees) =
+                    bincode::deserialize::<(String, Vec<String>)>(&val).unwrap();
+                pr_list.push(PullRequest {
+                    owner: match caps.name("owner") {
+                        Some(x) => String::from(x.as_str()),
+                        None => unreachable!(),
+                    },
+                    repo: match caps.name("name") {
+                        Some(x) => String::from(x.as_str()),
+                        None => unreachable!(),
+                    },
+                    number: match caps.name("number") {
+                        Some(x) => x.as_str().trim().parse::<i32>()?,
+                        None => unreachable!(),
+                    },
+                    title,
+                    assignees,
+                });
+            }
             None => eprintln!("key doesn't match owner/name#number"),
         }
     }
