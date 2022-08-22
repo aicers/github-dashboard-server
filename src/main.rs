@@ -16,6 +16,18 @@ use std::path::PathBuf;
 use std::process::exit;
 use tokio::{task, time};
 
+const USAGE: &str = "\
+USAGE:
+    github-dashboard-server <CONFIG>
+
+FLAGS:
+    -h, --help       Prints help information
+    -V, --version    Prints version information
+
+ARG:
+    <CONFIG>    A TOML config file
+";
+
 const DEFAULT_CONFIG: &str = "config.toml";
 const ISSUE_TREE_NAME: &str = "issues";
 const PR_TREE_NAME: &str = "pull_requests";
@@ -37,7 +49,7 @@ async fn main() {
                 exit(0);
             }
             "-h" | "--help" => {
-                println!("{}", conf::USG);
+                println!("{}", USAGE);
                 exit(0);
             }
             _ => PathBuf::from(args_val),
@@ -45,10 +57,7 @@ async fn main() {
     } else if let Some(proj_dirs) = ProjectDirs::from(QUALIFIER, ORGANIZATION, PKG_NAME) {
         proj_dirs.config_dir().join(DEFAULT_CONFIG)
     } else {
-        eprintln!(
-            "No valid home directory path. Refer to usage. \n{}",
-            conf::USG
-        );
+        eprintln!("No valid home directory path. Refer to usage. \n{}", USAGE);
         exit(1);
     };
 
