@@ -37,15 +37,6 @@ pub struct Config {
 
 pub const PKG_NAME: &str = env!("CARGO_PKG_NAME");
 pub const PKG_VER: &str = env!("CARGO_PKG_VERSION");
-pub const USG: &str = "USAGE:
-    github-dashboard-server <CONFIG>
-
-FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
-
-ARG:
-    <CONFIG>    A TOML config file";
 
 pub fn load_config(path: &Path) -> Result<Config> {
     let mut config_str = String::new();
