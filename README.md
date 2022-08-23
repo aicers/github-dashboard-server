@@ -39,9 +39,8 @@ When you run the program, server reads the config file from the default folder.
 
 To run without giving the config file option, save the file to the path below.
 
-```sh
-"/Users/[username]/Library/Application Support/com.einsis.github-dashboard-server/config.toml"
-```
+* Linux: `$HOME`/.config/github-dashboard-server/config.toml
+* macOS: `$HOME`/Library/Application Support/com.einsis.github-dashboard-server/config.toml
 
 The web server will run using the address value in the config file.
 
