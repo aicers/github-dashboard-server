@@ -1,3 +1,4 @@
+mod checkout;
 mod conf;
 mod database;
 mod github;
@@ -12,6 +13,7 @@ use directories::ProjectDirs;
 use google::check_key;
 use std::path::PathBuf;
 use std::process::exit;
+use std::sync::Arc;
 use tokio::{task, time};
 
 const USAGE: &str = "\
@@ -30,6 +32,7 @@ const DEFAULT_CONFIG: &str = "config.toml";
 const ISSUE_TREE_NAME: &str = "issues";
 const PR_TREE_NAME: &str = "pull_requests";
 const ONE_HOUR: u64 = 60 * 60;
+const ONE_DAY: u64 = ONE_HOUR * 24;
 const ORGANIZATION: &str = "einsis";
 const QUALIFIER: &str = "com";
 
@@ -53,6 +56,7 @@ async fn main() {
             exit(1);
         }
     };
+    let repositories = Arc::new(config.repositories);
 
     let socket_addr = match parse_socket_addr(&config.web.address) {
         Ok(ret) => ret,
@@ -81,10 +85,16 @@ async fn main() {
     // Fetches issues and pull requests from GitHub every hour, and stores them
     // in the database.
     task::spawn(github::fetch_periodically(
-        config.repositories,
+        Arc::clone(&repositories),
         config.certification.token,
         time::Duration::from_secs(ONE_HOUR),
         database.clone(),
+    ));
+
+    task::spawn(checkout::fetch_periodically(
+        Arc::clone(&repositories),
+        time::Duration::from_secs(ONE_DAY),
+        config.certification.ssh,
     ));
 
     let schema = graphql::schema(database);

@@ -18,6 +18,7 @@ name = "github-dashboard-client"
 
 [certification]
 token = "github_token_info"
+ssh = ".ssh/id_ed25519"
 
 [database]
 db_name = "db_name"
@@ -27,6 +28,7 @@ db_name = "db_name"
 * `owner`: The owner of the github repository.
 * `names`: The name of the github repository.
 * `token`: Generated github access token value. (Token Generation: [github-access-token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token#creating-a-token))
+* 'ssh': Path to ssh private key for github code checkout.
 * `db_name`: The name of the db to create/connect.
 
 Build and serve the app with Cargo as follows:

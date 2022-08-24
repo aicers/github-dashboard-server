@@ -1,10 +1,9 @@
-use std::time::Duration;
-
 use crate::github::pull_requests::PullRequestsRepositoryPullRequestsNodesReviewRequestsNodesRequestedReviewer::User;
 use anyhow::{bail, Result};
 use graphql_client::{GraphQLQuery, QueryBody, Response as GraphQlResponse};
 use reqwest::{Client, RequestBuilder, Response};
 use serde::Serialize;
+use std::{sync::Arc, time::Duration};
 use tokio::time;
 
 use crate::{conf::RepoInfo, database::Database};
@@ -43,7 +42,7 @@ pub struct GitHubPRs {
 }
 
 pub async fn fetch_periodically(
-    repositories: Vec<RepoInfo>,
+    repositories: Arc<Vec<RepoInfo>>,
     token: String,
     period: Duration,
     db: Database,
@@ -51,7 +50,7 @@ pub async fn fetch_periodically(
     let mut itv = time::interval(period);
     loop {
         itv.tick().await;
-        for repoinfo in &repositories {
+        for repoinfo in repositories.iter() {
             match send_github_issue_query(&repoinfo.owner, &repoinfo.name, &token).await {
                 Ok(resps) => {
                     for resp in resps {
