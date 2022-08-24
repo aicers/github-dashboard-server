@@ -1,7 +1,12 @@
+use std::time::Duration;
+
 use anyhow::{bail, Result};
 use graphql_client::{GraphQLQuery, QueryBody, Response as GraphQlResponse};
 use reqwest::{Client, RequestBuilder, Response};
 use serde::Serialize;
+use tokio::time;
+
+use crate::{conf::RepoInfo, database::Database};
 
 const GITHUB_FETCH_SIZE: i64 = 10;
 const GITHUB_URL: &str = "https://api.github.com/graphql";
@@ -35,7 +40,46 @@ pub struct GitHubPRs {
     pub assignees: Vec<String>,
 }
 
-pub async fn send_github_issue_query(
+pub async fn fetch_periodically(
+    repositories: Vec<RepoInfo>,
+    token: String,
+    period: Duration,
+    db: Database,
+) {
+    let mut itv = time::interval(period);
+    loop {
+        itv.tick().await;
+        for repoinfo in &repositories {
+            match send_github_issue_query(&repoinfo.owner, &repoinfo.name, &token).await {
+                Ok(resps) => {
+                    for resp in resps {
+                        if let Err(error) = db.insert_issues(resp, &repoinfo.owner, &repoinfo.name)
+                        {
+                            eprintln!("Problem while insert Sled Database. {}", error);
+                        }
+                    }
+                }
+                Err(error) => {
+                    eprintln!("Problem while sending github query. {}", error);
+                }
+            }
+            match send_github_pr_query(&repoinfo.owner, &repoinfo.name, &token).await {
+                Ok(resps) => {
+                    for resp in resps {
+                        if let Err(error) = db.insert_prs(resp, &repoinfo.owner, &repoinfo.name) {
+                            eprintln!("Problem while insert Sled Database. {}", error);
+                        }
+                    }
+                }
+                Err(error) => {
+                    eprintln!("Problem while sending github query. {}", error);
+                }
+            }
+        }
+    }
+}
+
+async fn send_github_issue_query(
     owner: &str,
     name: &str,
     token: &str,
@@ -77,11 +121,7 @@ pub async fn send_github_issue_query(
     Ok(total_issue)
 }
 
-pub async fn send_github_pr_query(
-    owner: &str,
-    name: &str,
-    token: &str,
-) -> Result<Vec<Vec<GitHubPRs>>> {
+async fn send_github_pr_query(owner: &str, name: &str, token: &str) -> Result<Vec<Vec<GitHubPRs>>> {
     let mut total_prs = Vec::new();
     let mut end_cur: Option<String> = None;
     let mut prs: Vec<GitHubPRs> = Vec::new();
