@@ -5,22 +5,22 @@
 Before running the app, create a toml extension file and write it in the format below.
 
 ```toml
- [web]
- address = "127.0.0.1:8000"
+[web]
+address = "127.0.0.1:8000"
 
- [[repositories]]
- owner = "aicers"
- name = "github-dashboard-server"
+[[repositories]]
+owner = "aicers"
+name = "github-dashboard-server"
 
- [[repositories]]
- owner = "aicers"
- name = "github-dashboard-client"
+[[repositories]]
+owner = "aicers"
+name = "github-dashboard-client"
 
- [certification]
- token = "github_token_info"
+[certification]
+token = "github_token_info"
 
- [database]
- db_name = "db_name"
+[database]
+db_name = "db_name"
 ```
 
 * `address`: Address of web server.
