@@ -9,7 +9,6 @@ use crate::conf::PKG_NAME;
 use conf::{load_config, parse_socket_addr};
 use database::Database;
 use directories::ProjectDirs;
-use github::{send_github_issue_query, send_github_pr_query};
 use google::check_key;
 use std::path::PathBuf;
 use std::process::exit;
@@ -70,7 +69,6 @@ async fn main() {
             exit(1);
         }
     };
-    let db = database.clone();
 
     match check_key(&database.clone()).await {
         Ok(ret) => ret,
@@ -79,53 +77,15 @@ async fn main() {
             exit(1);
         }
     };
-    task::spawn(async move {
-        let mut itv = time::interval(time::Duration::from_secs(ONE_HOUR));
-        loop {
-            itv.tick().await;
-            for repoinfo in &config.repositories {
-                match send_github_issue_query(
-                    &repoinfo.owner,
-                    &repoinfo.name,
-                    &config.certification.token,
-                )
-                .await
-                {
-                    Ok(resps) => {
-                        for resp in resps {
-                            if let Err(error) =
-                                db.insert_issues(resp, &repoinfo.owner, &repoinfo.name)
-                            {
-                                eprintln!("Problem while insert Sled Database. {}", error);
-                            }
-                        }
-                    }
-                    Err(error) => {
-                        eprintln!("Problem while sending github query. {}", error);
-                    }
-                }
-                match send_github_pr_query(
-                    &repoinfo.owner,
-                    &repoinfo.name,
-                    &config.certification.token,
-                )
-                .await
-                {
-                    Ok(resps) => {
-                        for resp in resps {
-                            if let Err(error) = db.insert_prs(resp, &repoinfo.owner, &repoinfo.name)
-                            {
-                                eprintln!("Problem while insert Sled Database. {}", error);
-                            }
-                        }
-                    }
-                    Err(error) => {
-                        eprintln!("Problem while sending github query. {}", error);
-                    }
-                }
-            }
-        }
-    });
+
+    // Fetches issues and pull requests from GitHub every hour, and stores them
+    // in the database.
+    task::spawn(github::fetch_periodically(
+        config.repositories,
+        config.certification.token,
+        time::Duration::from_secs(ONE_HOUR),
+        database.clone(),
+    ));
 
     let schema = graphql::schema(database);
     web::serve(schema, socket_addr).await;
