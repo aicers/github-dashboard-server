@@ -36,7 +36,6 @@ pub struct Config {
 }
 
 pub const PKG_NAME: &str = env!("CARGO_PKG_NAME");
-pub const PKG_VER: &str = env!("CARGO_PKG_VERSION");
 
 pub fn load_config(path: &Path) -> Result<Config> {
     let mut config_str = String::new();
