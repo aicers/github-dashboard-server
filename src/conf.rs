@@ -20,6 +20,7 @@ pub struct RepoInfo {
 #[derive(Debug, Deserialize)]
 pub struct Certification {
     pub token: String,
+    pub ssh: String,
 }
 
 #[derive(Debug, Deserialize)]
