@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use crate::github::pull_requests::PullRequestsRepositoryPullRequestsNodesReviewRequestsNodesRequestedReviewer::User;
 use anyhow::{bail, Result};
 use graphql_client::{GraphQLQuery, QueryBody, Response as GraphQlResponse};
 use reqwest::{Client, RequestBuilder, Response};
@@ -38,6 +39,7 @@ pub struct GitHubPRs {
     pub number: i64,
     pub title: String,
     pub assignees: Vec<String>,
+    pub reviewers: Vec<String>,
 }
 
 pub async fn fetch_periodically(
@@ -142,14 +144,26 @@ async fn send_github_pr_query(owner: &str, name: &str, token: &str) -> Result<Ve
                 if let Some(nodes) = repository.pull_requests.nodes.as_ref() {
                     for pr in nodes.iter().flatten() {
                         let mut assignees: Vec<String> = Vec::new();
+                        let mut reviewers: Vec<String> = Vec::new();
+
                         let assignees_nodes = pr.assignees.nodes.as_ref().unwrap();
+                        let reviewers_nodes =
+                            pr.review_requests.as_ref().unwrap().nodes.as_ref().unwrap();
+
                         for pr_assignees in assignees_nodes.iter().flatten() {
                             assignees.push(pr_assignees.login.clone());
+                        }
+                        for pr_reviewers in reviewers_nodes.iter().flatten() {
+                            let req_reviewers = pr_reviewers.requested_reviewer.as_ref().unwrap();
+                            if let User(on_user) = req_reviewers {
+                                reviewers.push(on_user.login.clone());
+                            }
                         }
                         prs.push(GitHubPRs {
                             number: pr.number,
                             title: pr.title.to_string(),
                             assignees,
+                            reviewers,
                         });
                     }
                     if !repository.pull_requests.page_info.has_next_page {

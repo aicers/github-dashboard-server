@@ -101,7 +101,11 @@ impl Database {
     pub fn insert_prs(&self, resp: Vec<GitHubPRs>, owner: &str, name: &str) -> Result<()> {
         for item in resp {
             let keystr: String = format!("{}/{}#{}", owner, name, item.number);
-            Database::insert(&keystr, (&item.title, &item.assignees), &self.pr_tree)?;
+            Database::insert(
+                &keystr,
+                (&item.title, &item.assignees, &item.reviewers),
+                &self.pr_tree,
+            )?;
         }
         Ok(())
     }
@@ -259,8 +263,8 @@ fn get_pr_list(re: &Regex, range_list: Vec<(IVec, IVec)>) -> Result<Vec<PullRequ
     for (key, val) in range_list {
         match re.captures(String::from_utf8(key.to_vec())?.as_str()) {
             Some(caps) => {
-                let (title, assignees) =
-                    bincode::deserialize::<(String, Vec<String>)>(&val).unwrap();
+                let (title, assignees, reviewers) =
+                    bincode::deserialize::<(String, Vec<String>, Vec<String>)>(&val).unwrap();
                 pr_list.push(PullRequest {
                     owner: match caps.name("owner") {
                         Some(x) => String::from(x.as_str()),
@@ -276,6 +280,7 @@ fn get_pr_list(re: &Regex, range_list: Vec<(IVec, IVec)>) -> Result<Vec<PullRequ
                     },
                     title,
                     assignees,
+                    reviewers,
                 });
             }
             None => eprintln!("key doesn't match owner/name#number"),
