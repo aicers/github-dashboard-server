@@ -12,6 +12,16 @@ query PullRequests($owner: String!, $name:String!, $first:Int, $last:Int, $befor
           nodes {
             login
           }
+        },
+        reviewRequests(first: 10) {
+          nodes {
+            requestedReviewer {
+              __typename
+              ... on User {
+                login
+              }
+            }
+          }
         }
       }
     }
