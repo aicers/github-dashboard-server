@@ -98,7 +98,7 @@ async fn main() {
     ));
 
     let schema = graphql::schema(database);
-    web::serve(schema, socket_addr).await;
+    web::serve(schema, socket_addr, &config.web.key, &config.web.cert).await;
 }
 
 /// Parses the command line arguments and returns the first argument.
