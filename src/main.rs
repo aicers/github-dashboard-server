@@ -28,6 +28,7 @@ ARG:
     <CONFIG>    A TOML config file
 ";
 
+const FIVE_MIN: u64 = 60 * 5;
 const DEFAULT_CONFIG: &str = "config.toml";
 const ISSUE_TREE_NAME: &str = "issues";
 const PR_TREE_NAME: &str = "pull_requests";
@@ -88,6 +89,7 @@ async fn main() {
         Arc::clone(&repositories),
         config.certification.token,
         time::Duration::from_secs(ONE_HOUR),
+        time::Duration::from_secs(FIVE_MIN),
         database.clone(),
     ));
 
