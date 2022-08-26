@@ -111,19 +111,11 @@ impl Database {
     }
 
     pub fn has_prev(key: String, tree: &Tree) -> Result<bool> {
-        if tree.get_lt(key)?.is_some() {
-            Ok(true)
-        } else {
-            Ok(false)
-        }
+        Ok(tree.get_lt(key)?.is_some())
     }
 
     pub fn has_next(key: String, tree: &Tree) -> Result<bool> {
-        if tree.get_gt(key)?.is_some() {
-            Ok(true)
-        } else {
-            Ok(false)
-        }
+        Ok(tree.get_gt(key)?.is_some())
     }
 
     pub fn tree(&self, t_name: &str) -> Result<&Tree> {
