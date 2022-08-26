@@ -10,6 +10,8 @@ use warp::{http::Response as HttpResponse, Filter};
 pub async fn serve(
     schema: Schema<graphql::Query, EmptyMutation, EmptySubscription>,
     socketaddr: SocketAddr,
+    key: &str,
+    cert: &str,
 ) {
     type MySchema = Schema<graphql::Query, EmptyMutation, EmptySubscription>;
 
@@ -32,5 +34,10 @@ pub async fn serve(
 
     let routes = graphql_playground.or(warp::post().and(route_graphql.or(route_home)));
 
-    warp::serve(routes).run(socketaddr).await;
+    warp::serve(routes)
+        .tls()
+        .key_path(key)
+        .cert_path(cert)
+        .run(socketaddr)
+        .await;
 }

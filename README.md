@@ -7,6 +7,8 @@ Before running the app, create a toml extension file and write it in the format 
 ```toml
 [web]
 address = "127.0.0.1:8000"
+key = "key_path"
+cert = "cert_path"
 
 [[repositories]]
 owner = "aicers"
@@ -25,6 +27,8 @@ db_name = "db_name"
 ```
 
 * `address`: Address of web server.
+* `key`: tls key path of web server.
+* `cert`: tls cert path of web server.
 * `owner`: The owner of the github repository.
 * `names`: The name of the github repository.
 * `token`: Generated github access token value. (Token Generation: [github-access-token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token#creating-a-token))
@@ -46,9 +50,9 @@ To run without giving the config file option, save the file to the path below.
 
 The web server will run using the address value in the config file.
 
-Connect to `http://localhost:8000` in your browser to run the app,
+Connect to `https://localhost:8000` in your browser to run the app,
 
-* `http://localhost:8000/graphql/playground` to playground
+* `https://localhost:8000/graphql/playground` to playground
 
 ## FLAGS
 

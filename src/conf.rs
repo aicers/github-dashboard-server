@@ -9,6 +9,8 @@ use std::path::Path;
 #[derive(Debug, Deserialize)]
 pub struct ServerAddr {
     pub address: String,
+    pub key: String,
+    pub cert: String,
 }
 
 #[derive(Debug, Deserialize)]
