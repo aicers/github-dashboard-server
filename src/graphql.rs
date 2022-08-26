@@ -151,8 +151,8 @@ where
     if let Some(prev_val) = prev {
         if let Some(next_val) = next {
             return Ok((
-                Database::get_prev_exist(format!("{}", prev_val), tree)?,
-                Database::get_next_exist(format!("{}", next_val), tree)?,
+                Database::has_prev(format!("{}", prev_val), tree)?,
+                Database::has_next(format!("{}", next_val), tree)?,
             ));
         }
     }

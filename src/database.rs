@@ -110,7 +110,7 @@ impl Database {
         Ok(())
     }
 
-    pub fn get_prev_exist(key: String, tree: &Tree) -> Result<bool> {
+    pub fn has_prev(key: String, tree: &Tree) -> Result<bool> {
         if tree.get_lt(key)?.is_some() {
             Ok(true)
         } else {
@@ -118,7 +118,7 @@ impl Database {
         }
     }
 
-    pub fn get_next_exist(key: String, tree: &Tree) -> Result<bool> {
+    pub fn has_next(key: String, tree: &Tree) -> Result<bool> {
         if tree.get_gt(key)?.is_some() {
             Ok(true)
         } else {
