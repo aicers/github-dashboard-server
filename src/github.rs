@@ -45,36 +45,52 @@ pub async fn fetch_periodically(
     repositories: Arc<Vec<RepoInfo>>,
     token: String,
     period: Duration,
+    retry: Duration,
     db: Database,
 ) {
     let mut itv = time::interval(period);
     loop {
         itv.tick().await;
         for repoinfo in repositories.iter() {
-            match send_github_issue_query(&repoinfo.owner, &repoinfo.name, &token).await {
-                Ok(resps) => {
-                    for resp in resps {
-                        if let Err(error) = db.insert_issues(resp, &repoinfo.owner, &repoinfo.name)
-                        {
-                            eprintln!("Problem while insert Sled Database. {}", error);
+            let mut re_itv = time::interval(retry);
+            loop {
+                re_itv.tick().await;
+                match send_github_issue_query(&repoinfo.owner, &repoinfo.name, &token).await {
+                    Ok(resps) => {
+                        for resp in resps {
+                            if let Err(error) =
+                                db.insert_issues(resp, &repoinfo.owner, &repoinfo.name)
+                            {
+                                eprintln!("Problem while insert Sled Database. {}", error);
+                            }
                         }
+                        break;
+                    }
+                    Err(error) => {
+                        eprintln!("Problem while sending github query. Query retransmission is done after 5 minutes. {}", error);
                     }
                 }
-                Err(error) => {
-                    eprintln!("Problem while sending github query. {}", error);
-                }
+                itv.reset();
             }
-            match send_github_pr_query(&repoinfo.owner, &repoinfo.name, &token).await {
-                Ok(resps) => {
-                    for resp in resps {
-                        if let Err(error) = db.insert_prs(resp, &repoinfo.owner, &repoinfo.name) {
-                            eprintln!("Problem while insert Sled Database. {}", error);
+
+            let mut re_itv = time::interval(retry);
+            loop {
+                re_itv.tick().await;
+                match send_github_pr_query(&repoinfo.owner, &repoinfo.name, &token).await {
+                    Ok(resps) => {
+                        for resp in resps {
+                            if let Err(error) = db.insert_prs(resp, &repoinfo.owner, &repoinfo.name)
+                            {
+                                eprintln!("Problem while insert Sled Database. {}", error);
+                            }
                         }
+                        break;
+                    }
+                    Err(error) => {
+                        eprintln!("Problem while sending github query. Query retransmission is done after 5 minutes. {}", error);
                     }
                 }
-                Err(error) => {
-                    eprintln!("Problem while sending github query. {}", error);
-                }
+                itv.reset();
             }
         }
     }
