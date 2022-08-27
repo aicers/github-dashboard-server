@@ -3,7 +3,7 @@ use crate::{
     graphql::{Issue, PagingType, PullRequest},
     ISSUE_TREE_NAME, PR_TREE_NAME,
 };
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use regex::Regex;
 use serde::Serialize;
 use sled::{Db, IVec, Tree};
@@ -128,7 +128,6 @@ impl Database {
 
     pub fn select_issue_range(p_type: PagingType, tree: &Tree) -> Result<Vec<Issue>> {
         let mut range_list: Vec<(IVec, IVec)>;
-        let re = Regex::new(r"(?P<owner>\S+)/(?P<name>\S+)#(?P<number>[0-9]+)")?;
         match p_type {
             PagingType::All => {
                 range_list = tree
@@ -171,12 +170,11 @@ impl Database {
                 range_list.reverse();
             }
         }
-        get_issue_list(&re, range_list)
+        get_issue_list(range_list)
     }
 
     pub fn select_pr_range(p_type: PagingType, tree: &Tree) -> Result<Vec<PullRequest>> {
         let mut range_list: Vec<(IVec, IVec)>;
-        let re = Regex::new(r"(?P<owner>\S+)/(?P<name>\S+)#(?P<number>[0-9]+)")?;
         match p_type {
             PagingType::All => {
                 range_list = tree
@@ -219,64 +217,80 @@ impl Database {
                 range_list.reverse();
             }
         }
-        get_pr_list(&re, range_list)
+        get_pr_list(range_list)
     }
 }
 
-fn get_issue_list(re: &Regex, range_list: Vec<(IVec, IVec)>) -> Result<Vec<Issue>> {
+fn get_issue_list(range_list: Vec<(IVec, IVec)>) -> Result<Vec<Issue>> {
     let mut issue_list = Vec::new();
 
     for (key, val) in range_list {
-        match re.captures(String::from_utf8(key.to_vec())?.as_str()) {
-            Some(caps) => issue_list.push(Issue {
-                owner: match caps.name("owner") {
-                    Some(x) => String::from(x.as_str()),
-                    None => unreachable!(),
-                },
-                repo: match caps.name("name") {
-                    Some(x) => String::from(x.as_str()),
-                    None => unreachable!(),
-                },
-                number: match caps.name("number") {
-                    Some(x) => x.as_str().trim().parse::<i32>()?,
-                    None => unreachable!(),
-                },
-                title: bincode::deserialize::<String>(&val)?,
-            }),
-            None => eprintln!("key doesn't match owner/name#number"),
-        }
+        let (owner, repo, number) = parse_key(&key)?;
+        issue_list.push(Issue {
+            owner,
+            repo,
+            number: i32::try_from(number).unwrap_or(i32::MAX),
+            title: bincode::deserialize::<String>(&val)?,
+        });
     }
     Ok(issue_list)
 }
 
-fn get_pr_list(re: &Regex, range_list: Vec<(IVec, IVec)>) -> Result<Vec<PullRequest>> {
+fn get_pr_list(range_list: Vec<(IVec, IVec)>) -> Result<Vec<PullRequest>> {
     let mut pr_list = Vec::new();
 
     for (key, val) in range_list {
-        match re.captures(String::from_utf8(key.to_vec())?.as_str()) {
-            Some(caps) => {
-                let (title, assignees, reviewers) =
-                    bincode::deserialize::<(String, Vec<String>, Vec<String>)>(&val).unwrap();
-                pr_list.push(PullRequest {
-                    owner: match caps.name("owner") {
-                        Some(x) => String::from(x.as_str()),
-                        None => unreachable!(),
-                    },
-                    repo: match caps.name("name") {
-                        Some(x) => String::from(x.as_str()),
-                        None => unreachable!(),
-                    },
-                    number: match caps.name("number") {
-                        Some(x) => x.as_str().trim().parse::<i32>()?,
-                        None => unreachable!(),
-                    },
-                    title,
-                    assignees,
-                    reviewers,
-                });
-            }
-            None => eprintln!("key doesn't match owner/name#number"),
-        }
+        let (owner, repo, number) = parse_key(&key)?;
+        let (title, assignees, reviewers) =
+            bincode::deserialize::<(String, Vec<String>, Vec<String>)>(&val).unwrap();
+        pr_list.push(PullRequest {
+            owner,
+            repo,
+            number: i32::try_from(number).unwrap_or(i32::MAX),
+            title,
+            assignees,
+            reviewers,
+        });
     }
     Ok(pr_list)
+}
+
+fn parse_key(key: &[u8]) -> Result<(String, String, i64)> {
+    let re = Regex::new(r"(?P<owner>\S+)/(?P<name>\S+)#(?P<number>[0-9]+)").expect("valid regex");
+    if let Some(caps) = re.captures(
+        String::from_utf8(key.to_vec())
+            .context("invalid key")?
+            .as_str(),
+    ) {
+        let owner = caps
+            .name("owner")
+            .ok_or_else(|| anyhow!("invalid key"))?
+            .as_str()
+            .to_string();
+        let name = caps
+            .name("name")
+            .ok_or_else(|| anyhow!("invalid key"))?
+            .as_str()
+            .to_string();
+        let number = caps
+            .name("number")
+            .ok_or_else(|| anyhow!("invalid key"))?
+            .as_str()
+            .parse::<i64>()
+            .context("invalid key")?;
+        Ok((owner, name, number))
+    } else {
+        Err(anyhow!("invalid key"))
+    }
+}
+
+mod tests {
+    #[test]
+    fn test_parse_key() {
+        let key = "rust-lang/rust#12345";
+        let (owner, name, number) = super::parse_key(key.as_bytes()).unwrap();
+        assert_eq!(owner, "rust-lang");
+        assert_eq!(name, "rust");
+        assert_eq!(number, 12345);
+    }
 }
