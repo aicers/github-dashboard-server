@@ -73,7 +73,7 @@ impl Query {
                     Err(e) => bail!("{:?}", e),
                 };
                 let p_type = check_paging_type(after, before, first, last)?;
-                let select_vec = Database::select_issue_range(p_type, tree)?;
+                let select_vec = db.select_issue_range(p_type)?;
                 let (prev, next) =
                     check_prev_next_exist(select_vec.first(), select_vec.last(), tree)?;
                 Ok(connect_cursor(select_vec, prev, next))
@@ -112,7 +112,7 @@ impl Query {
                 };
 
                 let p_type = check_paging_type(after, before, first, last)?;
-                let select_vec = Database::select_pr_range(p_type, tree)?;
+                let select_vec = db.select_pr_range(p_type)?;
                 let (prev, next) =
                     check_prev_next_exist(select_vec.first(), select_vec.last(), tree)?;
                 Ok(connect_cursor(select_vec, prev, next))
