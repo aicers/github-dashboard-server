@@ -126,7 +126,8 @@ impl Database {
         }
     }
 
-    pub fn select_issue_range(p_type: PagingType, tree: &Tree) -> Result<Vec<Issue>> {
+    pub fn select_issue_range(&self, p_type: PagingType) -> Result<Vec<Issue>> {
+        let tree = &self.issue_tree;
         let mut range_list: Vec<(IVec, IVec)>;
         match p_type {
             PagingType::All => {
@@ -173,7 +174,8 @@ impl Database {
         get_issue_list(range_list)
     }
 
-    pub fn select_pr_range(p_type: PagingType, tree: &Tree) -> Result<Vec<PullRequest>> {
+    pub fn select_pr_range(&self, p_type: PagingType) -> Result<Vec<PullRequest>> {
+        let tree = &self.pr_tree;
         let mut range_list: Vec<(IVec, IVec)>;
         match p_type {
             PagingType::All => {
