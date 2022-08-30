@@ -104,7 +104,7 @@ impl Database {
 
     pub fn insert_issues(&self, resp: Vec<GitHubIssue>, owner: &str, name: &str) -> Result<()> {
         for item in resp {
-            let keystr: String = format!("{}/{}#{}", owner, name, item.number);
+            let keystr: String = format!("{}/{}#{}by{}", owner, name, item.number, item.author);
             Database::insert(&keystr, &item.title, &self.issue_tree)?;
         }
         Ok(())
@@ -231,12 +231,13 @@ fn get_issue_list(range_list: Vec<(IVec, IVec)>) -> Result<Vec<Issue>> {
     let mut issue_list = Vec::new();
 
     for (key, val) in range_list {
-        let (owner, repo, number) = parse_key(&key)?;
+        let (owner, repo, number, author) = parse_key_issues(&key)?;
         issue_list.push(Issue {
             owner,
             repo,
             number: i32::try_from(number).unwrap_or(i32::MAX),
             title: bincode::deserialize::<String>(&val)?,
+            author,
         });
     }
     Ok(issue_list)
@@ -259,6 +260,39 @@ fn get_pr_list(range_list: Vec<(IVec, IVec)>) -> Result<Vec<PullRequest>> {
         });
     }
     Ok(pr_list)
+}
+fn parse_key_issues(key: &[u8]) -> Result<(String, String, i64, String)> {
+    let re = Regex::new(r"(?P<owner>\S+)/(?P<name>\S+)#(?P<number>[0-9]+)").expect("valid regex");
+    if let Some(caps) = re.captures(
+        String::from_utf8(key.to_vec())
+            .context("invalid key")?
+            .as_str(),
+    ) {
+        let owner = caps
+            .name("owner")
+            .ok_or_else(|| anyhow!("invalid key"))?
+            .as_str()
+            .to_string();
+        let name = caps
+            .name("name")
+            .ok_or_else(|| anyhow!("invalid key"))?
+            .as_str()
+            .to_string();
+        let number = caps
+            .name("number")
+            .ok_or_else(|| anyhow!("invalid key"))?
+            .as_str()
+            .parse::<i64>()
+            .context("invalid key")?;
+        let author = caps
+            .name("author")
+            .ok_or_else(|| anyhow!("invalid key"))?
+            .as_str()
+            .to_string();
+        Ok((owner, name, number, author))
+    } else {
+        Err(anyhow!("invalid key"))
+    }
 }
 
 fn parse_key(key: &[u8]) -> Result<(String, String, i64)> {

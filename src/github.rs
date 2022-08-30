@@ -1,4 +1,7 @@
-use crate::github::pull_requests::PullRequestsRepositoryPullRequestsNodesReviewRequestsNodesRequestedReviewer::User;
+use crate::github::{
+    open_issues::OpenIssuesRepositoryIssuesNodesAuthor::User as userName,
+    pull_requests::PullRequestsRepositoryPullRequestsNodesReviewRequestsNodesRequestedReviewer::User,
+};
 use anyhow::{bail, Result};
 use chrono::Utc;
 use graphql_client::{GraphQLQuery, QueryBody, Response as GraphQlResponse};
@@ -35,6 +38,7 @@ pub struct PullRequests;
 pub struct GitHubIssue {
     pub number: i64,
     pub title: String,
+    pub author: String,
 }
 
 #[derive(Debug)]
@@ -134,9 +138,17 @@ async fn send_github_issue_query(
             if let Some(repository) = data.repository {
                 if let Some(nodes) = repository.issues.nodes.as_ref() {
                     for issue in nodes.iter().flatten() {
+                        let mut author: String = String::new();
+
+                        let author_ref = issue.author.as_ref().unwrap();
+                        if let userName(on_user) = author_ref {
+                            author.clone_from(&on_user.login.clone());
+                        }
+
                         issues.push(GitHubIssue {
                             number: issue.number,
                             title: issue.title.to_string(),
+                            author,
                         });
                     }
                     if !repository.issues.page_info.has_next_page {

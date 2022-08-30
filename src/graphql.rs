@@ -15,6 +15,7 @@ pub struct Issue {
     pub repo: String,
     pub number: i32,
     pub title: String,
+    pub author: String,
 }
 
 #[derive(Debug, SimpleObject)]
@@ -38,7 +39,11 @@ pub enum PagingType {
 
 impl Display for Issue {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}/{}#{}", self.owner, self.repo, self.number)
+        write!(
+            f,
+            "{}/{}#{}by{}",
+            self.owner, self.repo, self.number, self.author
+        )
     }
 }
 
