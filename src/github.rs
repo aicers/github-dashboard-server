@@ -1,5 +1,6 @@
 use crate::github::pull_requests::PullRequestsRepositoryPullRequestsNodesReviewRequestsNodesRequestedReviewer::User;
 use anyhow::{bail, Result};
+use chrono::Utc;
 use graphql_client::{GraphQLQuery, QueryBody, Response as GraphQlResponse};
 use reqwest::{Client, RequestBuilder, Response};
 use serde::Serialize;
@@ -11,6 +12,9 @@ use crate::{conf::RepoInfo, database::Database};
 const GITHUB_FETCH_SIZE: i64 = 10;
 const GITHUB_URL: &str = "https://api.github.com/graphql";
 const APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
+const INIT_TIME: &str = "1992-06-05T00:00:00Z";
+
+type DateTime = String;
 
 #[derive(GraphQLQuery)]
 #[graphql(
@@ -55,7 +59,16 @@ pub async fn fetch_periodically(
             let mut re_itv = time::interval(retry);
             loop {
                 re_itv.tick().await;
-                match send_github_issue_query(&repoinfo.owner, &repoinfo.name, &token).await {
+                let last_time = match db.select_db("last_time") {
+                    Ok(r) => r,
+                    Err(_) => INIT_TIME.to_string(),
+                };
+                if let Err(e) = db.insert_db("last_time", format!("{:?}", Utc::now())) {
+                    eprintln!("Insert DateTime Error: {}", e);
+                }
+                match send_github_issue_query(&repoinfo.owner, &repoinfo.name, &last_time, &token)
+                    .await
+                {
                     Ok(resps) => {
                         for resp in resps {
                             if let Err(error) =
@@ -67,7 +80,7 @@ pub async fn fetch_periodically(
                         break;
                     }
                     Err(error) => {
-                        eprintln!("Problem while sending github query. Query retransmission is done after 5 minutes. {}", error);
+                        eprintln!("Problem while sending github issue query. Query retransmission is done after 5 minutes. {}", error);
                     }
                 }
                 itv.reset();
@@ -87,7 +100,7 @@ pub async fn fetch_periodically(
                         break;
                     }
                     Err(error) => {
-                        eprintln!("Problem while sending github query. Query retransmission is done after 5 minutes. {}", error);
+                        eprintln!("Problem while sending github pr query. Query retransmission is done after 5 minutes. {}", error);
                     }
                 }
                 itv.reset();
@@ -99,6 +112,7 @@ pub async fn fetch_periodically(
 async fn send_github_issue_query(
     owner: &str,
     name: &str,
+    last_time: &str,
     token: &str,
 ) -> Result<Vec<Vec<GitHubIssue>>> {
     let mut total_issue = Vec::new();
@@ -112,6 +126,7 @@ async fn send_github_issue_query(
             last: None,
             before: None,
             after: end_cur,
+            lasttime: last_time.to_string(),
         };
         let resp_body: GraphQlResponse<open_issues::ResponseData> =
             send_query::<OpenIssues>(token, var).await?.json().await?;

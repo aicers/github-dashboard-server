@@ -1,6 +1,6 @@
-query OpenIssues($owner: String!, $name:String!, $first:Int, $last:Int, $before:String, $after:String) {
+query OpenIssues($owner: String!, $name: String!, $first: Int, $last: Int, $before: String, $after: String, $lasttime: DateTime!) {
   repository(owner: $owner name: $name) {
-    issues(first: $first last: $last before: $before after: $after) {
+    issues(first: $first last: $last before: $before after: $after filterBy: { since: $lasttime }) {
       pageInfo {
         hasNextPage,
         endCursor,
