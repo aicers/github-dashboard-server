@@ -1,12 +1,14 @@
 use crate::{
     github::{GitHubIssue, GitHubPRs},
     graphql::{Issue, PagingType, PullRequest},
-    ISSUE_TREE_NAME, PR_TREE_NAME,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use regex::Regex;
 use serde::Serialize;
 use sled::{Db, IVec, Tree};
+
+const ISSUE_TREE_NAME: &str = "issues";
+const PR_TREE_NAME: &str = "pull_requests";
 
 #[derive(Clone)]
 pub struct Database {
@@ -21,20 +23,30 @@ impl Database {
         Ok(sled::open(path)?)
     }
 
-    fn connect_trees(db: &Db, trees: &[&str]) -> Result<(Tree, Tree)> {
-        let issue_tree = db.open_tree(trees[0])?;
-        let pr_tree = db.open_tree(trees[1])?;
+    fn connect_trees(db: &Db) -> Result<(Tree, Tree)> {
+        let issue_tree = db.open_tree(ISSUE_TREE_NAME)?;
+        let pr_tree = db.open_tree(PR_TREE_NAME)?;
         Ok((issue_tree, pr_tree))
     }
 
-    pub fn connect(db_path: &str, trees: &[&str]) -> Result<Database> {
+    pub fn connect(db_path: &str) -> Result<Database> {
         let db = Database::connect_db(db_path)?;
-        let (issue_tree, pr_tree) = Database::connect_trees(&db, trees)?;
+        let (issue_tree, pr_tree) = Database::connect_trees(&db)?;
         Ok(Database {
             db,
             issue_tree,
             pr_tree,
         })
+    }
+
+    /// Returns the data store for issues.
+    pub fn issue_store(&self) -> &Tree {
+        &self.issue_tree
+    }
+
+    /// Returns the data store for pull request.
+    pub fn pr_store(&self) -> &Tree {
+        &self.pr_tree
     }
 
     fn insert<T: Serialize>(key: &str, val: T, tree: &Tree) -> Result<()> {
@@ -116,14 +128,6 @@ impl Database {
 
     pub fn has_next(key: String, tree: &Tree) -> Result<bool> {
         Ok(tree.get_gt(key)?.is_some())
-    }
-
-    pub fn tree(&self, t_name: &str) -> Result<&Tree> {
-        match t_name {
-            ISSUE_TREE_NAME => Ok(&self.issue_tree),
-            PR_TREE_NAME => Ok(&self.pr_tree),
-            _ => Err(anyhow!("Invalid tree name")),
-        }
     }
 
     pub fn select_issue_range(&self, p_type: PagingType) -> Result<Vec<Issue>> {

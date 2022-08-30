@@ -1,4 +1,4 @@
-use crate::{database::Database, ISSUE_TREE_NAME, PR_TREE_NAME};
+use crate::database::Database;
 use anyhow::{anyhow, bail, Result};
 use async_graphql::{
     types::connection::{query, Connection, Edge, EmptyFields},
@@ -68,14 +68,10 @@ impl Query {
                     Ok(ret) => ret,
                     Err(e) => bail!("{:?}", e),
                 };
-                let tree = match db.tree(ISSUE_TREE_NAME) {
-                    Ok(ret) => ret,
-                    Err(e) => bail!("{:?}", e),
-                };
                 let p_type = check_paging_type(after, before, first, last)?;
                 let select_vec = db.select_issue_range(p_type)?;
                 let (prev, next) =
-                    check_prev_next_exist(select_vec.first(), select_vec.last(), tree)?;
+                    has_prev_next(select_vec.first(), select_vec.last(), db.issue_store())?;
                 Ok(connect_cursor(select_vec, prev, next))
             },
         )
@@ -105,16 +101,10 @@ impl Query {
                     Ok(ret) => ret,
                     Err(e) => bail!("{:?}", e),
                 };
-
-                let tree = match db.tree(PR_TREE_NAME) {
-                    Ok(ret) => ret,
-                    Err(e) => bail!("{:?}", e),
-                };
-
                 let p_type = check_paging_type(after, before, first, last)?;
                 let select_vec = db.select_pr_range(p_type)?;
                 let (prev, next) =
-                    check_prev_next_exist(select_vec.first(), select_vec.last(), tree)?;
+                    has_prev_next(select_vec.first(), select_vec.last(), db.pr_store())?;
                 Ok(connect_cursor(select_vec, prev, next))
             },
         )
@@ -144,7 +134,7 @@ where
     connection
 }
 
-fn check_prev_next_exist<T>(prev: Option<&T>, next: Option<&T>, tree: &Tree) -> Result<(bool, bool)>
+fn has_prev_next<T>(prev: Option<&T>, next: Option<&T>, tree: &Tree) -> Result<(bool, bool)>
 where
     T: OutputType + Display,
 {
@@ -156,7 +146,7 @@ where
             ));
         }
     }
-    Err(anyhow!("Wrong Issue value"))
+    Err(anyhow!("Wrong range values"))
 }
 
 fn check_paging_type(

@@ -30,8 +30,6 @@ ARG:
 
 const FIVE_MIN: u64 = 60 * 5;
 const DEFAULT_CONFIG: &str = "config.toml";
-const ISSUE_TREE_NAME: &str = "issues";
-const PR_TREE_NAME: &str = "pull_requests";
 const ONE_HOUR: u64 = 60 * 60;
 const ONE_DAY: u64 = ONE_HOUR * 24;
 const ORGANIZATION: &str = "einsis";
@@ -66,8 +64,8 @@ async fn main() {
             exit(1);
         }
     };
-    let trees = vec![ISSUE_TREE_NAME, PR_TREE_NAME];
-    let database = match Database::connect(&config.database.db_name, &trees) {
+
+    let database = match Database::connect(&config.database.db_name) {
         Ok(ret) => ret,
         Err(error) => {
             eprintln!("Problem while Connect Sled Database. {}", error);
