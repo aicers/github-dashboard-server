@@ -8,6 +8,12 @@ query OpenIssues($owner: String!, $name: String!, $first: Int, $last: Int, $befo
       nodes {
         number,
         title,
+        author {
+          __typename
+          ... on User {
+            login
+          }
+        }
       }
     }
   }
