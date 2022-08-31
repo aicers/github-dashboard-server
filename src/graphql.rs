@@ -39,11 +39,7 @@ pub enum PagingType {
 
 impl Display for Issue {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(
-            f,
-            "{}/{}#{}by{}",
-            self.owner, self.repo, self.number, self.author
-        )
+        write!(f, "{}/{}#{}", self.owner, self.repo, self.number)
     }
 }
 

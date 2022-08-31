@@ -144,7 +144,6 @@ async fn send_github_issue_query(
                         if let userName(on_user) = author_ref {
                             author.clone_from(&on_user.login.clone());
                         }
-
                         issues.push(GitHubIssue {
                             number: issue.number,
                             title: issue.title.to_string(),
