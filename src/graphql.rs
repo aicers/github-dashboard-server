@@ -83,8 +83,7 @@ impl Query {
         }
     }
 
-    #[allow(non_snake_case)]
-    pub async fn pullRequests<'ctx>(
+    pub async fn pull_requests<'ctx>(
         &self,
         ctx: &Context<'ctx>,
         after: Option<String>,
