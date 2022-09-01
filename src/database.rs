@@ -1,5 +1,5 @@
 use crate::{
-    github::{GitHubIssue, GitHubPRs},
+    github::{GitHubIssue, GitHubPullRequests},
     graphql::{Issue, PagingType, PullRequest},
 };
 use anyhow::{anyhow, bail, Context, Result};
@@ -8,13 +8,13 @@ use serde::Serialize;
 use sled::{Db, IVec, Tree};
 
 const ISSUE_TREE_NAME: &str = "issues";
-const PR_TREE_NAME: &str = "pull_requests";
+const PULL_REQUEST_TREE_NAME: &str = "pull_requests";
 
 #[derive(Clone)]
 pub struct Database {
     db: Db,
     issue_tree: Tree,
-    pr_tree: Tree,
+    pull_request_tree: Tree,
 }
 
 impl Database {
@@ -24,17 +24,17 @@ impl Database {
 
     fn connect_trees(db: &Db) -> Result<(Tree, Tree)> {
         let issue_tree = db.open_tree(ISSUE_TREE_NAME)?;
-        let pr_tree = db.open_tree(PR_TREE_NAME)?;
-        Ok((issue_tree, pr_tree))
+        let pull_request_tree = db.open_tree(PULL_REQUEST_TREE_NAME)?;
+        Ok((issue_tree, pull_request_tree))
     }
 
     pub fn connect(db_path: &str) -> Result<Database> {
         let db = Database::connect_db(db_path)?;
-        let (issue_tree, pr_tree) = Database::connect_trees(&db)?;
+        let (issue_tree, pull_request_tree) = Database::connect_trees(&db)?;
         Ok(Database {
             db,
             issue_tree,
-            pr_tree,
+            pull_request_tree,
         })
     }
 
@@ -44,8 +44,8 @@ impl Database {
     }
 
     /// Returns the data store for pull request.
-    pub fn pr_store(&self) -> &Tree {
-        &self.pr_tree
+    pub fn pull_request_store(&self) -> &Tree {
+        &self.pull_request_tree
     }
 
     fn insert<T: Serialize>(key: &str, val: T, tree: &Tree) -> Result<()> {
@@ -106,13 +106,18 @@ impl Database {
         Ok(())
     }
 
-    pub fn insert_prs(&self, resp: Vec<GitHubPRs>, owner: &str, name: &str) -> Result<()> {
+    pub fn insert_pull_requests(
+        &self,
+        resp: Vec<GitHubPullRequests>,
+        owner: &str,
+        name: &str,
+    ) -> Result<()> {
         for item in resp {
             let keystr: String = format!("{}/{}#{}", owner, name, item.number);
             Database::insert(
                 &keystr,
                 (&item.title, &item.assignees, &item.reviewers),
-                &self.pr_tree,
+                &self.pull_request_tree,
             )?;
         }
         Ok(())
@@ -174,8 +179,8 @@ impl Database {
         get_issue_list(range_list)
     }
 
-    pub fn select_pr_range(&self, p_type: PagingType) -> Result<Vec<PullRequest>> {
-        let tree = &self.pr_tree;
+    pub fn select_pull_request_range(&self, p_type: PagingType) -> Result<Vec<PullRequest>> {
+        let tree = &self.pull_request_tree;
         let mut range_list: Vec<(IVec, IVec)>;
         match p_type {
             PagingType::All => {
@@ -219,7 +224,7 @@ impl Database {
                 range_list.reverse();
             }
         }
-        get_pr_list(range_list)
+        get_pull_request_list(range_list)
     }
 }
 
@@ -241,14 +246,14 @@ fn get_issue_list(range_list: Vec<(IVec, IVec)>) -> Result<Vec<Issue>> {
     Ok(issue_list)
 }
 
-fn get_pr_list(range_list: Vec<(IVec, IVec)>) -> Result<Vec<PullRequest>> {
-    let mut pr_list = Vec::new();
+fn get_pull_request_list(range_list: Vec<(IVec, IVec)>) -> Result<Vec<PullRequest>> {
+    let mut pull_request_list = Vec::new();
 
     for (key, val) in range_list {
         let (owner, repo, number) = parse_key(&key)?;
         let (title, assignees, reviewers) =
             bincode::deserialize::<(String, Vec<String>, Vec<String>)>(&val).unwrap();
-        pr_list.push(PullRequest {
+        pull_request_list.push(PullRequest {
             owner,
             repo,
             number: i32::try_from(number).unwrap_or(i32::MAX),
@@ -257,7 +262,7 @@ fn get_pr_list(range_list: Vec<(IVec, IVec)>) -> Result<Vec<PullRequest>> {
             reviewers,
         });
     }
-    Ok(pr_list)
+    Ok(pull_request_list)
 }
 
 fn parse_key(key: &[u8]) -> Result<(String, String, i64)> {

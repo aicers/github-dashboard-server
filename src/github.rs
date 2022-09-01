@@ -42,7 +42,7 @@ pub struct GitHubIssue {
 }
 
 #[derive(Debug)]
-pub struct GitHubPRs {
+pub struct GitHubPullRequests {
     pub number: i64,
     pub title: String,
     pub assignees: Vec<String>,
@@ -96,7 +96,8 @@ pub async fn fetch_periodically(
                 match send_github_pr_query(&repoinfo.owner, &repoinfo.name, &token).await {
                     Ok(resps) => {
                         for resp in resps {
-                            if let Err(error) = db.insert_prs(resp, &repoinfo.owner, &repoinfo.name)
+                            if let Err(error) =
+                                db.insert_pull_requests(resp, &repoinfo.owner, &repoinfo.name)
                             {
                                 eprintln!("Problem while insert Sled Database. {}", error);
                             }
@@ -164,10 +165,14 @@ async fn send_github_issue_query(
     Ok(total_issue)
 }
 
-async fn send_github_pr_query(owner: &str, name: &str, token: &str) -> Result<Vec<Vec<GitHubPRs>>> {
+async fn send_github_pr_query(
+    owner: &str,
+    name: &str,
+    token: &str,
+) -> Result<Vec<Vec<GitHubPullRequests>>> {
     let mut total_prs = Vec::new();
     let mut end_cur: Option<String> = None;
-    let mut prs: Vec<GitHubPRs> = Vec::new();
+    let mut prs: Vec<GitHubPullRequests> = Vec::new();
     loop {
         let var = pull_requests::Variables {
             owner: owner.to_string(),
@@ -200,7 +205,7 @@ async fn send_github_pr_query(owner: &str, name: &str, token: &str) -> Result<Ve
                                 reviewers.push(on_user.login.clone());
                             }
                         }
-                        prs.push(GitHubPRs {
+                        prs.push(GitHubPullRequests {
                             number: pr.number,
                             title: pr.title.to_string(),
                             assignees,

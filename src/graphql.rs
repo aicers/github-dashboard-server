@@ -102,9 +102,12 @@ impl Query {
                     Err(e) => bail!("{:?}", e),
                 };
                 let p_type = check_paging_type(after, before, first, last)?;
-                let select_vec = db.select_pr_range(p_type)?;
-                let (prev, next) =
-                    has_prev_next(select_vec.first(), select_vec.last(), db.pr_store())?;
+                let select_vec = db.select_pull_request_range(p_type)?;
+                let (prev, next) = has_prev_next(
+                    select_vec.first(),
+                    select_vec.last(),
+                    db.pull_request_store(),
+                )?;
                 Ok(connect_cursor(select_vec, prev, next))
             },
         )
