@@ -59,17 +59,18 @@ pub async fn fetch_periodically(
     let mut itv = time::interval(period);
     loop {
         itv.tick().await;
+        let last_time = match db.select_db("last_time") {
+            Ok(r) => r,
+            Err(_) => INIT_TIME.to_string(),
+        };
+        if let Err(e) = db.insert_db("last_time", format!("{:?}", Utc::now())) {
+            eprintln!("Insert DateTime Error: {}", e);
+        }
+
         for repoinfo in repositories.iter() {
             let mut re_itv = time::interval(retry);
             loop {
                 re_itv.tick().await;
-                let last_time = match db.select_db("last_time") {
-                    Ok(r) => r,
-                    Err(_) => INIT_TIME.to_string(),
-                };
-                if let Err(e) = db.insert_db("last_time", format!("{:?}", Utc::now())) {
-                    eprintln!("Insert DateTime Error: {}", e);
-                }
                 match send_github_issue_query(&repoinfo.owner, &repoinfo.name, &last_time, &token)
                     .await
                 {
