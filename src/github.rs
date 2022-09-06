@@ -39,6 +39,7 @@ pub struct GitHubIssue {
     pub number: i64,
     pub title: String,
     pub author: String,
+    pub closed_at: Option<DateTime>,
 }
 
 #[derive(Debug)]
@@ -150,6 +151,7 @@ async fn send_github_issue_query(
                             number: issue.number,
                             title: issue.title.to_string(),
                             author,
+                            closed_at: issue.closed_at.clone(),
                         });
                     }
                     if !repository.issues.page_info.has_next_page {
