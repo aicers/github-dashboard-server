@@ -101,7 +101,11 @@ impl Database {
     pub fn insert_issues(&self, resp: Vec<GitHubIssue>, owner: &str, name: &str) -> Result<()> {
         for item in resp {
             let keystr: String = format!("{}/{}#{}", owner, name, item.number);
-            Database::insert(&keystr, (&item.title, &item.author), &self.issue_tree)?;
+            Database::insert(
+                &keystr,
+                (&item.title, &item.author, &item.closed_at),
+                &self.issue_tree,
+            )?;
         }
         Ok(())
     }
@@ -233,15 +237,19 @@ fn get_issue_list(range_list: Vec<(IVec, IVec)>) -> Result<Vec<Issue>> {
 
     for (key, val) in range_list {
         let (owner, repo, number) = parse_key(&key)?;
-        let (title, author) = bincode::deserialize::<(String, String)>(&val)
-            .unwrap_or(("No title".to_string(), "No author".to_string()));
-        issue_list.push(Issue {
-            owner,
-            repo,
-            number: i32::try_from(number).unwrap_or(i32::MAX),
-            title,
-            author,
-        });
+        let (title, author, closed_at) = bincode::deserialize::<(String, String, Option<String>)>(
+            &val,
+        )
+        .unwrap_or(("No title".to_string(), "No author".to_string(), None));
+        if closed_at.is_none() {
+            issue_list.push(Issue {
+                owner,
+                repo,
+                number: i32::try_from(number).unwrap_or(i32::MAX),
+                title,
+                author,
+            });
+        }
     }
     Ok(issue_list)
 }
