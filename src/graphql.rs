@@ -2,12 +2,14 @@ use crate::database::Database;
 use anyhow::{anyhow, bail, Result};
 use async_graphql::{
     types::connection::{query, Connection, Edge, EmptyFields},
-    Context, EmptyMutation, EmptySubscription, Object, OutputType, Schema, SimpleObject,
+    Context, EmptyMutation, EmptySubscription, Object, OutputType, SimpleObject,
 };
 use sled::Tree;
 use std::fmt::Display;
 
 pub struct Query;
+
+pub type Schema = async_graphql::Schema<Query, EmptyMutation, EmptySubscription>;
 
 #[derive(Debug, SimpleObject)]
 pub struct Issue {
@@ -178,7 +180,7 @@ fn check_paging_type(
     Ok(PagingType::All)
 }
 
-pub fn schema(database: Database) -> Schema<Query, EmptyMutation, EmptySubscription> {
+pub fn schema(database: Database) -> Schema {
     Schema::build(Query, EmptyMutation, EmptySubscription)
         .data(database)
         .finish()
