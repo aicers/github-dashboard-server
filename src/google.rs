@@ -1,5 +1,6 @@
 use anyhow::{bail, Result};
 use reqwest::{Client, Response};
+use tracing::error;
 
 use crate::database::Database;
 
@@ -22,11 +23,11 @@ pub async fn check_key(db: &Database) -> Result<bool> {
                         match (remove_key, insert_key) {
                             (Ok(_), Ok(_)) => Ok(true),
                             (Ok(_), Err(err)) => {
-                                eprintln!("Problem inserting the updated Google key");
+                                error!("Problem inserting the updated Google key");
                                 Err(err)
                             }
                             (Err(err), Ok(_)) => {
-                                eprintln!("Problem removing the old Google key");
+                                error!("Problem removing the old Google key");
                                 Err(err)
                             }
                             (Err(_), Err(_)) => bail!("Problem switching Google key"),
@@ -49,7 +50,7 @@ pub async fn check_key(db: &Database) -> Result<bool> {
             }
         }
         Err(err) => {
-            eprintln!("Problem with API call");
+            error!("Problem with API call");
             Err(err)
         }
     }

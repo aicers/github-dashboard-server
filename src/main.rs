@@ -81,6 +81,8 @@ async fn main() {
         }
     };
 
+    tracing_subscriber::fmt::init();
+
     // Fetches issues and pull requests from GitHub every hour, and stores them
     // in the database.
     task::spawn(github::fetch_periodically(

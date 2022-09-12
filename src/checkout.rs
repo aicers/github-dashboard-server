@@ -9,6 +9,7 @@ use std::{
     sync::Arc,
 };
 use tokio::time;
+use tracing::{error, info};
 
 const FETCH_HEAD: &str = "FETCH_HEAD";
 const LOCAL_BASE_REPO: &str = "repos";
@@ -61,14 +62,14 @@ fn pull_repo(name: &str, ssh: &str) -> Result<()> {
     let fetch_commit = repo.reference_to_annotated_commit(&fetch_head)?;
     let (analysis, _) = repo.merge_analysis(&[&fetch_commit])?;
     if analysis.is_up_to_date() {
-        println!("Already up to date");
+        info!("Already up to date");
     } else if analysis.is_fast_forward() {
         let refname = format!("refs/heads/{}", MAIN_BRANCH);
         let mut reference = repo.find_reference(&refname)?;
         reference.set_target(fetch_commit.id(), "Fast-Forward")?;
         repo.set_head(&refname)?;
         repo.checkout_head(Some(git2::build::CheckoutBuilder::default().force()))?;
-        println!("New commit pull success");
+        info!("New commit pull success");
     }
     Ok(())
 }
@@ -76,7 +77,7 @@ fn pull_repo(name: &str, ssh: &str) -> Result<()> {
 pub async fn fetch_periodically(repositories: Arc<Vec<RepoInfo>>, duration: Duration, ssh: String) {
     for repo_info in repositories.iter() {
         if let Err(error) = init_repo(&repo_info.owner, &repo_info.name, &ssh) {
-            eprintln!("{}", error);
+            error!("{}", error);
         }
     }
     let mut itv = time::interval(duration);
@@ -84,7 +85,7 @@ pub async fn fetch_periodically(repositories: Arc<Vec<RepoInfo>>, duration: Dura
         itv.tick().await;
         for repo_info in repositories.iter() {
             if let Err(error) = pull_repo(&repo_info.name, &ssh) {
-                eprintln!("Problem while git pull. {}", error);
+                error!("Problem while git pull. {}", error);
             }
         }
     }

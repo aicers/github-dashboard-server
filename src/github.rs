@@ -9,6 +9,7 @@ use reqwest::{Client, RequestBuilder, Response};
 use serde::Serialize;
 use std::{sync::Arc, time::Duration};
 use tokio::time;
+use tracing::error;
 
 use crate::{conf::RepoInfo, database::Database};
 
@@ -65,7 +66,7 @@ pub async fn fetch_periodically(
             Err(_) => INIT_TIME.to_string(),
         };
         if let Err(e) = db.insert_db("last_time", format!("{:?}", Utc::now())) {
-            eprintln!("Insert DateTime Error: {}", e);
+            error!("Insert DateTime Error: {}", e);
         }
 
         for repoinfo in repositories.iter() {
@@ -80,13 +81,13 @@ pub async fn fetch_periodically(
                             if let Err(error) =
                                 db.insert_issues(resp, &repoinfo.owner, &repoinfo.name)
                             {
-                                eprintln!("Problem while insert Sled Database. {}", error);
+                                error!("Problem while insert Sled Database. {}", error);
                             }
                         }
                         break;
                     }
                     Err(error) => {
-                        eprintln!("Problem while sending github issue query. Query retransmission is done after 5 minutes. {}", error);
+                        error!("Problem while sending github issue query. Query retransmission is done after 5 minutes. {}", error);
                     }
                 }
                 itv.reset();
@@ -101,13 +102,13 @@ pub async fn fetch_periodically(
                             if let Err(error) =
                                 db.insert_pull_requests(resp, &repoinfo.owner, &repoinfo.name)
                             {
-                                eprintln!("Problem while insert Sled Database. {}", error);
+                                error!("Problem while insert Sled Database. {}", error);
                             }
                         }
                         break;
                     }
                     Err(error) => {
-                        eprintln!("Problem while sending github pr query. Query retransmission is done after 5 minutes. {}", error);
+                        error!("Problem while sending github pr query. Query retransmission is done after 5 minutes. {}", error);
                     }
                 }
                 itv.reset();
