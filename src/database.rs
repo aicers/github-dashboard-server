@@ -6,6 +6,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use regex::Regex;
 use serde::Serialize;
 use sled::{Db, IVec, Tree};
+use std::path::Path;
 
 const ISSUE_TREE_NAME: &str = "issues";
 const PULL_REQUEST_TREE_NAME: &str = "pull_requests";
@@ -18,7 +19,7 @@ pub struct Database {
 }
 
 impl Database {
-    fn connect_db(path: &str) -> Result<Db> {
+    fn connect_db(path: &Path) -> Result<Db> {
         Ok(sled::open(path)?)
     }
 
@@ -28,7 +29,7 @@ impl Database {
         Ok((issue_tree, pull_request_tree))
     }
 
-    pub fn connect(db_path: &str) -> Result<Database> {
+    pub fn connect(db_path: &Path) -> Result<Database> {
         let db = Database::connect_db(db_path)?;
         let (issue_tree, pull_request_tree) = Database::connect_trees(&db)?;
         Ok(Database {
