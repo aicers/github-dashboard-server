@@ -53,7 +53,7 @@ impl Display for PullRequest {
 
 #[Object]
 impl Query {
-    pub async fn issues<'ctx>(
+    async fn issues<'ctx>(
         &self,
         ctx: &Context<'ctx>,
         after: Option<String>,
@@ -85,7 +85,7 @@ impl Query {
         }
     }
 
-    pub async fn pull_requests<'ctx>(
+    async fn pull_requests<'ctx>(
         &self,
         ctx: &Context<'ctx>,
         after: Option<String>,
