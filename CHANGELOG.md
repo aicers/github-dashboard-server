@@ -11,6 +11,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Tracing with a filter set by `RUST_LOG` environment variable.
 
+### Fixed
+
+- Returns an error instead of an issue with "No title" as the title when the
+  issue database contains an invalid key.
+- No longer panics when the database contains an invalid value.
+
 ## [0.1.0] - 2022-09-06
 
 ### Added

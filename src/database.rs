@@ -237,11 +237,16 @@ fn get_issue_list(range_list: Vec<(IVec, IVec)>) -> Result<Vec<Issue>> {
     let mut issue_list = Vec::new();
 
     for (key, val) in range_list {
-        let (owner, repo, number) = parse_key(&key)?;
-        let (title, author, closed_at) = bincode::deserialize::<(String, String, Option<String>)>(
-            &val,
-        )
-        .unwrap_or(("No title".to_string(), "No author".to_string(), None));
+        let (owner, repo, number) = parse_key(&key)
+            .with_context(|| format!("invalid key in database: {:02x?}", key.as_ref()))?;
+        let (title, author, closed_at) =
+            bincode::deserialize::<(String, String, Option<String>)>(&val).with_context(|| {
+                format!(
+                    "invalid value in database for key {:02x?}: {:02x?}",
+                    key.as_ref(),
+                    val.as_ref()
+                )
+            })?;
         if closed_at.is_none() {
             issue_list.push(Issue {
                 owner,
@@ -259,9 +264,18 @@ fn get_pull_request_list(range_list: Vec<(IVec, IVec)>) -> Result<Vec<PullReques
     let mut pull_request_list = Vec::new();
 
     for (key, val) in range_list {
-        let (owner, repo, number) = parse_key(&key)?;
+        let (owner, repo, number) = parse_key(&key)
+            .with_context(|| format!("invalid key in database: {:02x?}", key.as_ref()))?;
         let (title, assignees, reviewers) =
-            bincode::deserialize::<(String, Vec<String>, Vec<String>)>(&val).unwrap();
+            bincode::deserialize::<(String, Vec<String>, Vec<String>)>(&val).with_context(
+                || {
+                    format!(
+                        "invalid value in database for key {:02x?}: {:02x?}",
+                        key.as_ref(),
+                        val.as_ref()
+                    )
+                },
+            )?;
         pull_request_list.push(PullRequest {
             owner,
             repo,
