@@ -1,8 +1,8 @@
 use crate::database::Database;
-use anyhow::{anyhow, bail, Result};
+use anyhow::anyhow;
 use async_graphql::{
     types::connection::{query, Connection, Edge, EmptyFields},
-    Context, EmptyMutation, EmptySubscription, Object, OutputType, SimpleObject,
+    Context, EmptyMutation, EmptySubscription, Object, OutputType, Result, SimpleObject,
 };
 use sled::Tree;
 use std::fmt::Display;
@@ -61,28 +61,16 @@ impl Query {
         first: Option<i32>,
         last: Option<i32>,
     ) -> Result<Connection<String, Issue, EmptyFields, EmptyFields>> {
-        match query(
+        query(
             after,
             before,
             first,
             last,
             |after, before, first, last| async move {
-                let db = match ctx.data::<Database>() {
-                    Ok(ret) => ret,
-                    Err(e) => bail!("{:?}", e),
-                };
-                let p_type = check_paging_type(after, before, first, last)?;
-                let select_vec = db.select_issue_range(p_type)?;
-                let (prev, next) =
-                    has_prev_next(select_vec.first(), select_vec.last(), db.issue_store())?;
-                Ok(connect_cursor(select_vec, prev, next))
+                load_issues(ctx, after, before, first, last)
             },
         )
         .await
-        {
-            Ok(conn) => Ok(conn),
-            Err(e) => Err(anyhow!("{:?}", e)),
-        }
     }
 
     async fn pull_requests<'ctx>(
@@ -93,32 +81,49 @@ impl Query {
         first: Option<i32>,
         last: Option<i32>,
     ) -> Result<Connection<String, PullRequest, EmptyFields, EmptyFields>> {
-        match query(
+        query(
             after,
             before,
             first,
             last,
             |after, before, first, last| async move {
-                let db = match ctx.data::<Database>() {
-                    Ok(ret) => ret,
-                    Err(e) => bail!("{:?}", e),
-                };
-                let p_type = check_paging_type(after, before, first, last)?;
-                let select_vec = db.select_pull_request_range(p_type)?;
-                let (prev, next) = has_prev_next(
-                    select_vec.first(),
-                    select_vec.last(),
-                    db.pull_request_store(),
-                )?;
-                Ok(connect_cursor(select_vec, prev, next))
+                load_pull_requests(ctx, after, before, first, last)
             },
         )
         .await
-        {
-            Ok(conn) => Ok(conn),
-            Err(e) => Err(anyhow!("{:?}", e)),
-        }
     }
+}
+
+fn load_issues(
+    ctx: &Context<'_>,
+    after: Option<String>,
+    before: Option<String>,
+    first: Option<usize>,
+    last: Option<usize>,
+) -> Result<Connection<String, Issue, EmptyFields, EmptyFields>> {
+    let db = ctx.data::<Database>()?;
+    let p_type = check_paging_type(after, before, first, last)?;
+    let select_vec = db.select_issue_range(p_type)?;
+    let (prev, next) = has_prev_next(select_vec.first(), select_vec.last(), db.issue_store())?;
+    Ok(connect_cursor(select_vec, prev, next))
+}
+
+fn load_pull_requests(
+    ctx: &Context<'_>,
+    after: Option<String>,
+    before: Option<String>,
+    first: Option<usize>,
+    last: Option<usize>,
+) -> Result<Connection<String, PullRequest, EmptyFields, EmptyFields>> {
+    let db = ctx.data::<Database>()?;
+    let p_type = check_paging_type(after, before, first, last)?;
+    let select_vec = db.select_pull_request_range(p_type)?;
+    let (prev, next) = has_prev_next(
+        select_vec.first(),
+        select_vec.last(),
+        db.pull_request_store(),
+    )?;
+    Ok(connect_cursor(select_vec, prev, next))
 }
 
 fn connect_cursor<T>(
@@ -139,7 +144,7 @@ where
     connection
 }
 
-fn has_prev_next<T>(prev: Option<&T>, next: Option<&T>, tree: &Tree) -> Result<(bool, bool)>
+fn has_prev_next<T>(prev: Option<&T>, next: Option<&T>, tree: &Tree) -> anyhow::Result<(bool, bool)>
 where
     T: OutputType + Display,
 {
