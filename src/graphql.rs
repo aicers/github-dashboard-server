@@ -189,3 +189,49 @@ pub fn schema(database: Database) -> Schema {
         .data(database)
         .finish()
 }
+
+#[cfg(test)]
+struct TestSchema {
+    _dir: tempfile::TempDir, // to prevent the data directory from being deleted while the test is running
+    schema: Schema,
+}
+
+#[cfg(test)]
+impl TestSchema {
+    fn new() -> Self {
+        let db_dir = tempfile::tempdir().unwrap();
+        let db = Database::connect(db_dir.path()).unwrap();
+        let schema = schema(db);
+        Self {
+            _dir: db_dir,
+            schema,
+        }
+    }
+
+    async fn execute(&self, query: &str) -> async_graphql::Response {
+        let request: async_graphql::Request = query.into();
+        self.schema.execute(request).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TestSchema;
+
+    #[tokio::test]
+    async fn issues_empty() {
+        let schema = TestSchema::new();
+        let query = r#"
+        {
+            issues {
+                edges {
+                    node {
+                        number
+                    }
+                }
+            }
+        }"#;
+        let res = schema.execute(&query).await;
+        assert_eq!(res.data.to_string(), "{issues: {edges: []}}");
+    }
+}
