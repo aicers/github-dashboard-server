@@ -1,5 +1,4 @@
 use crate::database::Database;
-use anyhow::anyhow;
 use async_graphql::{
     types::connection::{query, Connection, Edge, EmptyFields},
     Context, EmptyMutation, EmptySubscription, Object, OutputType, Result, SimpleObject,
@@ -156,7 +155,7 @@ where
             ));
         }
     }
-    Err(anyhow!("Wrong range values"))
+    Ok((false, false))
 }
 
 fn check_paging_type(
