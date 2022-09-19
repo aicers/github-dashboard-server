@@ -1,5 +1,7 @@
 # AICE GitHub Dashboard Server
 
+[![Coverage Status](https://codecov.io/gh/aicers/github-dashboard-server/branch/main/graphs/badge.svg)](https://codecov.io/gh/aicers/github-dashboard-server)
+
 ## Usage
 
 Before running the app, create a toml extension file and write it in the format below.
