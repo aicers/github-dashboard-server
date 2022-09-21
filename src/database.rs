@@ -140,12 +140,6 @@ impl Database {
         let tree = &self.issue_tree;
         let mut range_list: Vec<(IVec, IVec)>;
         match p_type {
-            PagingType::All => {
-                range_list = tree
-                    .iter()
-                    .filter_map(std::result::Result::ok)
-                    .collect::<Vec<(IVec, IVec)>>();
-            }
             PagingType::First(f_val) => {
                 range_list = tree
                     .iter()
@@ -188,12 +182,6 @@ impl Database {
         let tree = &self.pull_request_tree;
         let mut range_list: Vec<(IVec, IVec)>;
         match p_type {
-            PagingType::All => {
-                range_list = tree
-                    .iter()
-                    .filter_map(std::result::Result::ok)
-                    .collect::<Vec<(IVec, IVec)>>();
-            }
             PagingType::First(f_val) => {
                 range_list = tree
                     .iter()

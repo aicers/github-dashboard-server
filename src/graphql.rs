@@ -11,6 +11,10 @@ use async_graphql::{
 use sled::Tree;
 use std::fmt::Display;
 
+/// The default page size for connections when neither `first` nor `last` is
+/// provided.
+const DEFAULT_PAGE_SIZE: usize = 100;
+
 /// A set of queries defined in the schema.
 ///
 /// This is exposed only for [`Schema`], and not used directly.
@@ -21,7 +25,6 @@ pub type Schema = async_graphql::Schema<Query, EmptyMutation, EmptySubscription>
 
 #[derive(Debug)]
 pub enum PagingType {
-    All,
     First(usize),
     Last(usize),
     AfterFirst(String, usize),
@@ -84,7 +87,18 @@ fn check_paging_type(
         }
         return Ok(PagingType::Last(l_val));
     }
-    Ok(PagingType::All)
+    if let Some(cursor) = after {
+        return Ok(PagingType::AfterFirst(
+            String::from_utf8(base64::decode(cursor)?)?,
+            DEFAULT_PAGE_SIZE,
+        ));
+    } else if let Some(cursor) = before {
+        return Ok(PagingType::BeforeLast(
+            String::from_utf8(base64::decode(cursor)?)?,
+            DEFAULT_PAGE_SIZE,
+        ));
+    }
+    Ok(PagingType::First(DEFAULT_PAGE_SIZE))
 }
 
 pub fn schema(database: Database) -> Schema {
