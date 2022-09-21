@@ -11,6 +11,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Tracing with a filter set by `RUST_LOG` environment variable.
 
+### Changed
+
+- GraphQL API `issues` and `pullRequests` return 100 items if neither `first`
+  nor `last` is specified.
+
 ### Fixed
 
 - Returns an error instead of an issue with "No title" as the title when the
