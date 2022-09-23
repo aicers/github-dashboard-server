@@ -6,9 +6,8 @@ pub use self::pull_request::PullRequest;
 use crate::database::Database;
 use async_graphql::{
     types::connection::{Connection, Edge, EmptyFields},
-    EmptyMutation, EmptySubscription, MergedObject, OutputType, Result,
+    Context, EmptyMutation, EmptySubscription, MergedObject, OutputType, Result,
 };
-use sled::Tree;
 use std::fmt::Display;
 
 /// The default page size for connections when neither `first` nor `last` is
@@ -22,14 +21,6 @@ const DEFAULT_PAGE_SIZE: usize = 100;
 pub struct Query(issue::IssueQuery, pull_request::PullRequestQuery);
 
 pub type Schema = async_graphql::Schema<Query, EmptyMutation, EmptySubscription>;
-
-#[derive(Debug)]
-pub enum PagingType {
-    First(usize),
-    Last(usize),
-    AfterFirst(String, usize),
-    BeforeLast(String, usize),
-}
 
 fn connect_cursor<T>(
     select_vec: Vec<T>,
@@ -49,62 +40,82 @@ where
     connection
 }
 
-fn has_prev_next<T>(prev: Option<&T>, next: Option<&T>, tree: &Tree) -> anyhow::Result<(bool, bool)>
-where
-    T: OutputType + Display,
-{
-    if let Some(prev_val) = prev {
-        if let Some(next_val) = next {
-            return Ok((
-                Database::has_prev(format!("{}", prev_val), tree)?,
-                Database::has_next(format!("{}", next_val), tree)?,
-            ));
-        }
-    }
-    Ok((false, false))
-}
-
-fn check_paging_type(
-    after: Option<String>,
-    before: Option<String>,
-    first: Option<usize>,
-    last: Option<usize>,
-) -> Result<PagingType> {
-    if let Some(f_val) = first {
-        if let Some(cursor) = after {
-            return Ok(PagingType::AfterFirst(
-                String::from_utf8(base64::decode(cursor)?)?,
-                f_val,
-            ));
-        }
-        return Ok(PagingType::First(f_val));
-    } else if let Some(l_val) = last {
-        if let Some(cursor) = before {
-            return Ok(PagingType::BeforeLast(
-                String::from_utf8(base64::decode(cursor)?)?,
-                l_val,
-            ));
-        }
-        return Ok(PagingType::Last(l_val));
-    }
-    if let Some(cursor) = after {
-        return Ok(PagingType::AfterFirst(
-            String::from_utf8(base64::decode(cursor)?)?,
-            DEFAULT_PAGE_SIZE,
-        ));
-    } else if let Some(cursor) = before {
-        return Ok(PagingType::BeforeLast(
-            String::from_utf8(base64::decode(cursor)?)?,
-            DEFAULT_PAGE_SIZE,
-        ));
-    }
-    Ok(PagingType::First(DEFAULT_PAGE_SIZE))
-}
-
 pub fn schema(database: Database) -> Schema {
     Schema::build(Query::default(), EmptyMutation, EmptySubscription)
         .data(database)
         .finish()
+}
+
+fn load_connection<N, I>(
+    ctx: &Context<'_>,
+    iter_builder: impl Fn(&Database, Option<&[u8]>, Option<&[u8]>) -> I,
+    after: Option<String>,
+    before: Option<String>,
+    first: Option<usize>,
+    last: Option<usize>,
+) -> Result<Connection<String, N, EmptyFields, EmptyFields>>
+where
+    N: Display + OutputType,
+    I: DoubleEndedIterator<Item = anyhow::Result<N>>,
+{
+    let db = ctx.data::<Database>()?;
+    let (nodes, has_previous, has_next) = if let Some(before) = before {
+        if after.is_some() {
+            return Err("cannot use both `after` and `before`".into());
+        }
+        if first.is_some() {
+            return Err("'before' and 'first' cannot be specified simultaneously".into());
+        }
+        let last = last.unwrap_or(DEFAULT_PAGE_SIZE);
+        let cursor = base64::decode(before)?;
+        let iter = iter_builder(db, None, Some(cursor.as_slice())).rev();
+        let (mut nodes, has_previous) = collect_nodes(iter, last)?;
+        nodes.reverse();
+        (nodes, has_previous, false)
+    } else if let Some(after) = after {
+        if before.is_some() {
+            return Err("cannot use both `after` and `before`".into());
+        }
+        if last.is_some() {
+            return Err("'after' and 'last' cannot be specified simultaneously".into());
+        }
+        let first = first.unwrap_or(DEFAULT_PAGE_SIZE);
+        let cursor = base64::decode(after)?;
+        let iter = iter_builder(db, Some(cursor.as_slice()), None);
+        let (nodes, has_next) = collect_nodes(iter, first)?;
+        (nodes, false, has_next)
+    } else if let Some(last) = last {
+        if first.is_some() {
+            return Err("first and last cannot be used together".into());
+        }
+        let iter = iter_builder(db, None, None).rev();
+        let (mut nodes, has_previous) = collect_nodes(iter, last)?;
+        nodes.reverse();
+        (nodes, has_previous, false)
+    } else {
+        let first = first.unwrap_or(DEFAULT_PAGE_SIZE);
+        let iter = iter_builder(db, None, None);
+        let (nodes, has_next) = collect_nodes(iter, first)?;
+        (nodes, false, has_next)
+    };
+    Ok(connect_cursor(nodes, has_previous, has_next))
+}
+
+fn collect_nodes<I, T>(mut iter: I, size: usize) -> Result<(Vec<T>, bool)>
+where
+    I: Iterator<Item = anyhow::Result<T>>,
+{
+    let mut nodes = Vec::with_capacity(size);
+    let mut has_more = false;
+    while let Some(node) = iter.next() {
+        let node = node.map_err(|e| format!("failed to read database: {}", e))?;
+        nodes.push(node);
+        if nodes.len() == size {
+            has_more = iter.next().is_some();
+            break;
+        }
+    }
+    Ok((nodes, has_more))
 }
 
 #[cfg(test)]

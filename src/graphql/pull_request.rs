@@ -1,5 +1,5 @@
-use super::{check_paging_type, connect_cursor, has_prev_next};
-use crate::database::Database;
+use crate::database::{self, Database, TryFromKeyValue};
+use anyhow::Context as AnyhowContext;
 use async_graphql::{
     connection::{query, Connection, EmptyFields},
     Context, Object, Result, SimpleObject,
@@ -14,6 +14,31 @@ pub struct PullRequest {
     pub title: String,
     pub assignees: Vec<String>,
     pub reviewers: Vec<String>,
+}
+
+impl TryFromKeyValue for PullRequest {
+    fn try_from_key_value(key: &[u8], value: &[u8]) -> anyhow::Result<Self> {
+        let (owner, repo, number) = database::parse_key(key)
+            .with_context(|| format!("invalid key in database: {:02x?}", key))?;
+        let (title, assignees, reviewers) =
+            bincode::deserialize::<(String, Vec<String>, Vec<String>)>(value).with_context(
+                || {
+                    format!(
+                        "invalid value in database for key {:02x?}: {:02x?}",
+                        key, value
+                    )
+                },
+            )?;
+        let pr = PullRequest {
+            title,
+            assignees,
+            reviewers,
+            owner,
+            repo,
+            number: i32::try_from(number).unwrap_or(i32::MAX),
+        };
+        Ok(pr)
+    }
 }
 
 impl fmt::Display for PullRequest {
@@ -40,28 +65,12 @@ impl PullRequestQuery {
             before,
             first,
             last,
-            |after, before, first, last| async move { load(ctx, after, before, first, last) },
+            |after, before, first, last| async move {
+                super::load_connection(ctx, Database::pull_requests, after, before, first, last)
+            },
         )
         .await
     }
-}
-
-fn load(
-    ctx: &Context<'_>,
-    after: Option<String>,
-    before: Option<String>,
-    first: Option<usize>,
-    last: Option<usize>,
-) -> Result<Connection<String, PullRequest, EmptyFields, EmptyFields>> {
-    let db = ctx.data::<Database>()?;
-    let p_type = check_paging_type(after, before, first, last)?;
-    let select_vec = db.select_pull_request_range(p_type)?;
-    let (prev, next) = has_prev_next(
-        select_vec.first(),
-        select_vec.last(),
-        db.pull_request_store(),
-    )?;
-    Ok(connect_cursor(select_vec, prev, next))
 }
 
 #[cfg(test)]

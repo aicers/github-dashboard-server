@@ -1,12 +1,12 @@
 use crate::{
     github::{GitHubIssue, GitHubPullRequests},
-    graphql::{Issue, PagingType, PullRequest},
+    graphql::{Issue, PullRequest},
 };
 use anyhow::{anyhow, bail, Context, Result};
 use regex::Regex;
 use serde::Serialize;
-use sled::{Db, IVec, Tree};
-use std::path::Path;
+use sled::{Db, Tree};
+use std::{marker::PhantomData, path::Path};
 
 const ISSUE_TREE_NAME: &str = "issues";
 const PULL_REQUEST_TREE_NAME: &str = "pull_requests";
@@ -37,16 +37,6 @@ impl Database {
             issue_tree,
             pull_request_tree,
         })
-    }
-
-    /// Returns the data store for issues.
-    pub fn issue_store(&self) -> &Tree {
-        &self.issue_tree
-    }
-
-    /// Returns the data store for pull request.
-    pub fn pull_request_store(&self) -> &Tree {
-        &self.pull_request_tree
     }
 
     fn insert<T: Serialize>(key: &str, val: T, tree: &Tree) -> Result<()> {
@@ -128,155 +118,66 @@ impl Database {
         Ok(())
     }
 
-    pub fn has_prev(key: String, tree: &Tree) -> Result<bool> {
-        Ok(tree.get_lt(key)?.is_some())
-    }
-
-    pub fn has_next(key: String, tree: &Tree) -> Result<bool> {
-        Ok(tree.get_gt(key)?.is_some())
-    }
-
-    pub fn select_issue_range(&self, p_type: PagingType) -> Result<Vec<Issue>> {
-        let tree = &self.issue_tree;
-        let mut range_list: Vec<(IVec, IVec)>;
-        match p_type {
-            PagingType::First(f_val) => {
-                range_list = tree
-                    .iter()
-                    .take(f_val)
-                    .filter_map(std::result::Result::ok)
-                    .collect::<Vec<(IVec, IVec)>>();
-            }
-            PagingType::Last(l_val) => {
-                let len = tree.len();
-                let skip = if len > l_val { len - l_val } else { 0 };
-                range_list = tree
-                    .iter()
-                    .skip(skip)
-                    .take(l_val)
-                    .filter_map(std::result::Result::ok)
-                    .collect::<Vec<(IVec, IVec)>>();
-            }
-            PagingType::AfterFirst(cursor, f_val) => {
-                range_list = tree
-                    .range(cursor..)
-                    .skip(1)
-                    .take(f_val)
-                    .filter_map(std::result::Result::ok)
-                    .collect::<Vec<(IVec, IVec)>>();
-            }
-            PagingType::BeforeLast(cursor, l_val) => {
-                range_list = tree
-                    .range(..cursor)
-                    .rev()
-                    .take(l_val)
-                    .filter_map(std::result::Result::ok)
-                    .collect::<Vec<(IVec, IVec)>>();
-                range_list.reverse();
-            }
+    pub fn issues(&self, start: Option<&[u8]>, end: Option<&[u8]>) -> Iter<Issue> {
+        let start = start.unwrap_or(b"\x00");
+        if let Some(end) = end {
+            self.issue_tree.range(start..end).into()
+        } else {
+            self.issue_tree.range(start..).into()
         }
-        get_issue_list(range_list)
     }
 
-    pub fn select_pull_request_range(&self, p_type: PagingType) -> Result<Vec<PullRequest>> {
-        let tree = &self.pull_request_tree;
-        let mut range_list: Vec<(IVec, IVec)>;
-        match p_type {
-            PagingType::First(f_val) => {
-                range_list = tree
-                    .iter()
-                    .take(f_val)
-                    .filter_map(std::result::Result::ok)
-                    .collect::<Vec<(IVec, IVec)>>();
-            }
-            PagingType::Last(l_val) => {
-                let len = tree.len();
-                let skip = if len > l_val { len - l_val } else { 0 };
-                range_list = tree
-                    .iter()
-                    .skip(skip)
-                    .take(l_val)
-                    .filter_map(std::result::Result::ok)
-                    .collect::<Vec<(IVec, IVec)>>();
-            }
-            PagingType::AfterFirst(cursor, f_val) => {
-                range_list = tree
-                    .range(cursor..)
-                    .skip(1)
-                    .take(f_val)
-                    .filter_map(std::result::Result::ok)
-                    .collect::<Vec<(IVec, IVec)>>();
-            }
-            PagingType::BeforeLast(cursor, l_val) => {
-                range_list = tree
-                    .range(..cursor)
-                    .rev()
-                    .take(l_val)
-                    .filter_map(std::result::Result::ok)
-                    .collect::<Vec<(IVec, IVec)>>();
-                range_list.reverse();
-            }
+    pub fn pull_requests(&self, start: Option<&[u8]>, end: Option<&[u8]>) -> Iter<PullRequest> {
+        let start = start.unwrap_or(b"\x00");
+        if let Some(end) = end {
+            self.pull_request_tree.range(start..end).into()
+        } else {
+            self.pull_request_tree.range(start..).into()
         }
-        get_pull_request_list(range_list)
     }
 }
 
-fn get_issue_list(range_list: Vec<(IVec, IVec)>) -> Result<Vec<Issue>> {
-    let mut issue_list = Vec::new();
+pub trait TryFromKeyValue {
+    fn try_from_key_value(key: &[u8], value: &[u8]) -> Result<Self>
+    where
+        Self: Sized;
+}
 
-    for (key, val) in range_list {
-        let (owner, repo, number) = parse_key(&key)
-            .with_context(|| format!("invalid key in database: {:02x?}", key.as_ref()))?;
-        let (title, author, closed_at) =
-            bincode::deserialize::<(String, String, Option<String>)>(&val).with_context(|| {
-                format!(
-                    "invalid value in database for key {:02x?}: {:02x?}",
-                    key.as_ref(),
-                    val.as_ref()
-                )
-            })?;
-        if closed_at.is_none() {
-            issue_list.push(Issue {
-                owner,
-                repo,
-                number: i32::try_from(number).unwrap_or(i32::MAX),
-                title,
-                author,
-            });
+pub struct Iter<T> {
+    inner: sled::Iter,
+    phantom: PhantomData<T>,
+}
+
+impl<T> From<sled::Iter> for Iter<T> {
+    fn from(iter: sled::Iter) -> Self {
+        Self {
+            inner: iter,
+            phantom: PhantomData,
         }
     }
-    Ok(issue_list)
 }
 
-fn get_pull_request_list(range_list: Vec<(IVec, IVec)>) -> Result<Vec<PullRequest>> {
-    let mut pull_request_list = Vec::new();
+impl<T: TryFromKeyValue> Iterator for Iter<T> {
+    type Item = anyhow::Result<T>;
 
-    for (key, val) in range_list {
-        let (owner, repo, number) = parse_key(&key)
-            .with_context(|| format!("invalid key in database: {:02x?}", key.as_ref()))?;
-        let (title, assignees, reviewers) =
-            bincode::deserialize::<(String, Vec<String>, Vec<String>)>(&val).with_context(
-                || {
-                    format!(
-                        "invalid value in database for key {:02x?}: {:02x?}",
-                        key.as_ref(),
-                        val.as_ref()
-                    )
-                },
-            )?;
-        pull_request_list.push(PullRequest {
-            owner,
-            repo,
-            number: i32::try_from(number).unwrap_or(i32::MAX),
-            title,
-            assignees,
-            reviewers,
-        });
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next().map(|item| {
+            let (key, value) = item?;
+            T::try_from_key_value(&key, &value)
+        })
     }
-    Ok(pull_request_list)
 }
 
-fn parse_key(key: &[u8]) -> Result<(String, String, i64)> {
+impl<T: TryFromKeyValue> DoubleEndedIterator for Iter<T> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.inner.next_back().map(|item| {
+            let (key, value) = item?;
+            T::try_from_key_value(&key, &value)
+        })
+    }
+}
+
+pub fn parse_key(key: &[u8]) -> Result<(String, String, i64)> {
     let re = Regex::new(r"(?P<owner>\S+)/(?P<name>\S+)#(?P<number>[0-9]+)").expect("valid regex");
     if let Some(caps) = re.captures(
         String::from_utf8(key.to_vec())
