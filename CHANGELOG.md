@@ -15,11 +15,13 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - GraphQL API `issues` and `pullRequests` return 100 items if neither `first`
   nor `last` is specified.
+- GraphQL API `issues` and `pullRequests` return an error if conflicting
+  pagination arguments (e.g., `first` and `before`) are provided simultaneously.
 
 ### Fixed
 
-- Returns an error instead of an issue with "No title" as the title when the
-  issue database contains an invalid key.
+- Returns an error instead of an issue or pull request with "No title" as the
+  title when the issue database contains an invalid key.
 - No longer panics when the database contains an invalid value.
 
 ## [0.1.0] - 2022-09-06

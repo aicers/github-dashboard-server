@@ -1,10 +1,11 @@
-use super::{check_paging_type, connect_cursor, has_prev_next};
-use crate::database::Database;
+use anyhow::Context as AnyhowContext;
 use async_graphql::{
     connection::{query, Connection, EmptyFields},
     Context, Object, Result, SimpleObject,
 };
 use std::fmt;
+
+use crate::database::{self, Database, TryFromKeyValue};
 
 #[derive(SimpleObject)]
 pub struct Issue {
@@ -13,6 +14,28 @@ pub struct Issue {
     pub number: i32,
     pub title: String,
     pub author: String,
+}
+
+impl TryFromKeyValue for Issue {
+    fn try_from_key_value(key: &[u8], value: &[u8]) -> anyhow::Result<Self> {
+        let (owner, repo, number) = database::parse_key(key)
+            .with_context(|| format!("invalid key in database: {:02x?}", key))?;
+        let (title, author, _) = bincode::deserialize::<(String, String, Option<String>)>(value)
+            .with_context(|| {
+                format!(
+                    "invalid value in database for key {:02x?}: {:02x?}",
+                    key, value
+                )
+            })?;
+        let issue = Issue {
+            title,
+            author,
+            owner,
+            repo,
+            number: i32::try_from(number).unwrap_or(i32::MAX),
+        };
+        Ok(issue)
+    }
 }
 
 impl fmt::Display for Issue {
@@ -39,24 +62,12 @@ impl IssueQuery {
             before,
             first,
             last,
-            |after, before, first, last| async move { load(ctx, after, before, first, last) },
+            |after, before, first, last| async move {
+                super::load_connection(ctx, Database::issues, after, before, first, last)
+            },
         )
         .await
     }
-}
-
-fn load(
-    ctx: &Context<'_>,
-    after: Option<String>,
-    before: Option<String>,
-    first: Option<usize>,
-    last: Option<usize>,
-) -> Result<Connection<String, Issue, EmptyFields, EmptyFields>> {
-    let db = ctx.data::<Database>()?;
-    let p_type = check_paging_type(after, before, first, last)?;
-    let select_vec = db.select_issue_range(p_type)?;
-    let (prev, next) = has_prev_next(select_vec.first(), select_vec.last(), db.issue_store())?;
-    Ok(connect_cursor(select_vec, prev, next))
 }
 
 #[cfg(test)]
