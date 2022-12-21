@@ -44,14 +44,14 @@ async fn main() {
     } else if let Some(proj_dirs) = ProjectDirs::from(QUALIFIER, ORGANIZATION, PKG_NAME) {
         proj_dirs.config_dir().join(DEFAULT_CONFIG)
     } else {
-        eprintln!("No valid home directory path. Refer to usage. \n{}", USAGE);
+        eprintln!("No valid home directory path. Refer to usage. \n{USAGE}");
         exit(1);
     };
 
     let config = match load_config(&config_filename) {
         Ok(ret) => ret,
         Err(error) => {
-            eprintln!("Problem while loading config. {}", error);
+            eprintln!("Problem while loading config. {error}");
             exit(1);
         }
     };
@@ -60,7 +60,7 @@ async fn main() {
     let socket_addr = match parse_socket_addr(&config.web.address) {
         Ok(ret) => ret,
         Err(error) => {
-            eprintln!("Problem while parsing socket address. {}", error);
+            eprintln!("Problem while parsing socket address. {error}");
             exit(1);
         }
     };
@@ -68,7 +68,7 @@ async fn main() {
     let database = match Database::connect(config.database.db_name.as_ref()) {
         Ok(ret) => ret,
         Err(error) => {
-            eprintln!("Problem while Connect Sled Database. {}", error);
+            eprintln!("Problem while Connect Sled Database. {error}");
             exit(1);
         }
     };
@@ -76,7 +76,7 @@ async fn main() {
     match check_key(&database.clone()).await {
         Ok(ret) => ret,
         Err(error) => {
-            eprintln!("Problem while checking for public Google key. {}", error);
+            eprintln!("Problem while checking for public Google key. {error}");
             exit(1);
         }
     };
@@ -116,7 +116,7 @@ fn parse() -> Option<String> {
     }
 
     if arg == "--help" || arg == "-h" {
-        print!("{}", USAGE);
+        print!("{USAGE}");
         exit(0);
     }
     if arg == "--version" || arg == "-V" {
@@ -124,8 +124,8 @@ fn parse() -> Option<String> {
         exit(0);
     }
     if arg.starts_with('-') {
-        eprintln!("Error: unknown option: {}", arg);
-        eprintln!("\n{}", USAGE);
+        eprintln!("Error: unknown option: {arg}");
+        eprintln!("\n{USAGE}");
         exit(1);
     }
 

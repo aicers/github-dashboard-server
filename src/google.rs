@@ -38,7 +38,7 @@ pub async fn check_key(db: &Database) -> Result<bool> {
                     bail!("Problem with getting a response")
                 }
                 (Ok(body), Err(_)) => {
-                    let insert_key = db.insert_db("google_key", &body);
+                    let insert_key = db.insert_db("google_key", body);
                     match insert_key {
                         Ok(_) => Ok(true),
                         Err(err) => Err(err),

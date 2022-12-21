@@ -19,7 +19,7 @@ pub struct Issue {
 impl TryFromKeyValue for Issue {
     fn try_from_key_value(key: &[u8], value: &[u8]) -> anyhow::Result<Self> {
         let (owner, repo, number) = database::parse_key(key)
-            .with_context(|| format!("invalid key in database: {:02x?}", key))?;
+            .with_context(|| format!("invalid key in database: {key:02x?}"))?;
         let (title, author, _) = bincode::deserialize::<(String, String, Option<String>)>(value)
             .with_context(|| {
                 format!(
@@ -87,7 +87,7 @@ mod tests {
                 }
             }
         }"#;
-        let res = schema.execute(&query).await;
+        let res = schema.execute(query).await;
         assert_eq!(res.data.to_string(), "{issues: {edges: []}}");
     }
 
@@ -129,7 +129,7 @@ mod tests {
                 }
             }
         }"#;
-        let res = schema.execute(&query).await;
+        let res = schema.execute(query).await;
         assert_eq!(
             res.data.to_string(),
             "{issues: {edges: [{node: {number: 1}},{node: {number: 2}}],pageInfo: {hasNextPage: true}}}"
@@ -143,7 +143,7 @@ mod tests {
                 }
             }
         }"#;
-        let res = schema.execute(&query).await;
+        let res = schema.execute(query).await;
         assert_eq!(
             res.data.to_string(),
             "{issues: {pageInfo: {hasNextPage: false}}}"
@@ -188,7 +188,7 @@ mod tests {
                 }
             }
         }"#;
-        let res = schema.execute(&query).await;
+        let res = schema.execute(query).await;
         assert_eq!(
             res.data.to_string(),
             "{issues: {edges: [{node: {number: 2}},{node: {number: 3}}],pageInfo: {hasPreviousPage: true}}}"
@@ -202,7 +202,7 @@ mod tests {
                 }
             }
         }"#;
-        let res = schema.execute(&query).await;
+        let res = schema.execute(query).await;
         assert_eq!(
             res.data.to_string(),
             "{issues: {pageInfo: {hasPreviousPage: false}}}"

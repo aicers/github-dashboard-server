@@ -39,7 +39,7 @@ fn init_repo(repo_owner: &str, repo_name: &str, ssh: &str) -> Result<()> {
     if !path.exists() {
         std::fs::create_dir_all(&path)?;
         builder.clone(
-            &format!("{}:{}/{}.git", REMOTE_BASE_URL, repo_owner, repo_name),
+            &format!("{REMOTE_BASE_URL}:{repo_owner}/{repo_name}.git"),
             &path,
         )?;
     }
@@ -64,7 +64,7 @@ fn pull_repo(name: &str, ssh: &str) -> Result<()> {
     if analysis.is_up_to_date() {
         info!("Already up to date");
     } else if analysis.is_fast_forward() {
-        let refname = format!("refs/heads/{}", MAIN_BRANCH);
+        let refname = format!("refs/heads/{MAIN_BRANCH}");
         let mut reference = repo.find_reference(&refname)?;
         reference.set_target(fetch_commit.id(), "Fast-Forward")?;
         repo.set_head(&refname)?;

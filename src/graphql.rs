@@ -35,7 +35,7 @@ where
     for output in select_vec {
         connection
             .edges
-            .push(Edge::new(base64::encode(format!("{}", output)), output));
+            .push(Edge::new(base64::encode(format!("{output}")), output));
     }
     connection
 }
@@ -108,7 +108,7 @@ where
     let mut nodes = Vec::with_capacity(size);
     let mut has_more = false;
     while let Some(node) = iter.next() {
-        let node = node.map_err(|e| format!("failed to read database: {}", e))?;
+        let node = node.map_err(|e| format!("failed to read database: {e}"))?;
         nodes.push(node);
         if nodes.len() == size {
             has_more = iter.next().is_some();

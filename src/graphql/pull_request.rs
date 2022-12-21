@@ -19,7 +19,7 @@ pub struct PullRequest {
 impl TryFromKeyValue for PullRequest {
     fn try_from_key_value(key: &[u8], value: &[u8]) -> anyhow::Result<Self> {
         let (owner, repo, number) = database::parse_key(key)
-            .with_context(|| format!("invalid key in database: {:02x?}", key))?;
+            .with_context(|| format!("invalid key in database: {key:02x?}"))?;
         let (title, assignees, reviewers) =
             bincode::deserialize::<(String, Vec<String>, Vec<String>)>(value).with_context(
                 || {
@@ -90,7 +90,7 @@ mod tests {
                 }
             }
         }"#;
-        let res = schema.execute(&query).await;
+        let res = schema.execute(query).await;
         assert_eq!(res.data.to_string(), "{pullRequests: {edges: []}}");
     }
 
@@ -129,7 +129,7 @@ mod tests {
                 }
             }
         }"#;
-        let res = schema.execute(&query).await;
+        let res = schema.execute(query).await;
         assert_eq!(
             res.data.to_string(),
             "{pullRequests: {edges: [{node: {number: 1}}],pageInfo: {hasNextPage: true}}}"
@@ -143,7 +143,7 @@ mod tests {
                 }
             }
         }"#;
-        let res = schema.execute(&query).await;
+        let res = schema.execute(query).await;
         assert_eq!(
             res.data.to_string(),
             "{pullRequests: {pageInfo: {hasNextPage: false}}}"
@@ -185,7 +185,7 @@ mod tests {
                 }
             }
         }"#;
-        let res = schema.execute(&query).await;
+        let res = schema.execute(query).await;
         assert_eq!(
             res.data.to_string(),
             "{pullRequests: {edges: [{node: {number: 2}}],pageInfo: {hasPreviousPage: true}}}"
@@ -199,7 +199,7 @@ mod tests {
                 }
             }
         }"#;
-        let res = schema.execute(&query).await;
+        let res = schema.execute(query).await;
         assert_eq!(
             res.data.to_string(),
             "{pullRequests: {pageInfo: {hasPreviousPage: false}}}"
