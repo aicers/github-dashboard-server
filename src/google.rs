@@ -21,12 +21,12 @@ pub async fn check_key(db: &Database) -> Result<bool> {
                         let remove_key = db.delete_db("google_key");
                         let insert_key = db.insert_db("google_key", &body);
                         match (remove_key, insert_key) {
-                            (Ok(_), Ok(_)) => Ok(true),
+                            (Ok(_), Ok(())) => Ok(true),
                             (Ok(_), Err(err)) => {
                                 error!("Problem inserting the updated Google key");
                                 Err(err)
                             }
-                            (Err(err), Ok(_)) => {
+                            (Err(err), Ok(())) => {
                                 error!("Problem removing the old Google key");
                                 Err(err)
                             }
@@ -40,7 +40,7 @@ pub async fn check_key(db: &Database) -> Result<bool> {
                 (Ok(body), Err(_)) => {
                     let insert_key = db.insert_db("google_key", body);
                     match insert_key {
-                        Ok(_) => Ok(true),
+                        Ok(()) => Ok(true),
                         Err(err) => Err(err),
                     }
                 }
