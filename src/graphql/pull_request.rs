@@ -1,10 +1,12 @@
-use crate::database::{self, Database, TryFromKeyValue};
+use std::fmt;
+
 use anyhow::Context as AnyhowContext;
 use async_graphql::{
     connection::{query, Connection, EmptyFields},
     Context, Object, Result, SimpleObject,
 };
-use std::fmt;
+
+use crate::database::{self, Database, TryFromKeyValue};
 
 #[derive(SimpleObject)]
 pub struct PullRequest {
@@ -22,12 +24,7 @@ impl TryFromKeyValue for PullRequest {
             .with_context(|| format!("invalid key in database: {key:02x?}"))?;
         let (title, assignees, reviewers) =
             bincode::deserialize::<(String, Vec<String>, Vec<String>)>(value).with_context(
-                || {
-                    format!(
-                        "invalid value in database for key {:02x?}: {:02x?}",
-                        key, value
-                    )
-                },
+                || format!("invalid value in database for key {key:02x?}: {value:02x?}"),
             )?;
         let pr = PullRequest {
             title,
@@ -52,9 +49,9 @@ pub(super) struct PullRequestQuery;
 
 #[Object]
 impl PullRequestQuery {
-    async fn pull_requests<'ctx>(
+    async fn pull_requests(
         &self,
-        ctx: &Context<'ctx>,
+        ctx: &Context<'_>,
         after: Option<String>,
         before: Option<String>,
         first: Option<i32>,
@@ -80,7 +77,7 @@ mod tests {
     #[tokio::test]
     async fn pull_requests_empty() {
         let schema = TestSchema::new();
-        let query = r#"
+        let query = r"
         {
             pullRequests {
                 edges {
@@ -89,7 +86,7 @@ mod tests {
                     }
                 }
             }
-        }"#;
+        }";
         let res = schema.execute(query).await;
         assert_eq!(res.data.to_string(), "{pullRequests: {edges: []}}");
     }
@@ -116,7 +113,7 @@ mod tests {
             .insert_pull_requests(pull_requests, "owner", "name")
             .unwrap();
 
-        let query = r#"
+        let query = r"
         {
             pullRequests(first: 1) {
                 edges {
@@ -128,21 +125,21 @@ mod tests {
                     hasNextPage
                 }
             }
-        }"#;
+        }";
         let res = schema.execute(query).await;
         assert_eq!(
             res.data.to_string(),
             "{pullRequests: {edges: [{node: {number: 1}}],pageInfo: {hasNextPage: true}}}"
         );
 
-        let query = r#"
+        let query = r"
         {
             pullRequests(first: 5) {
                 pageInfo {
                     hasNextPage
                 }
             }
-        }"#;
+        }";
         let res = schema.execute(query).await;
         assert_eq!(
             res.data.to_string(),
@@ -172,7 +169,7 @@ mod tests {
             .insert_pull_requests(pull_requests, "owner", "name")
             .unwrap();
 
-        let query = r#"
+        let query = r"
         {
             pullRequests(last: 1) {
                 edges {
@@ -184,21 +181,21 @@ mod tests {
                     hasPreviousPage
                 }
             }
-        }"#;
+        }";
         let res = schema.execute(query).await;
         assert_eq!(
             res.data.to_string(),
             "{pullRequests: {edges: [{node: {number: 2}}],pageInfo: {hasPreviousPage: true}}}"
         );
 
-        let query = r#"
+        let query = r"
         {
             pullRequests(last: 2) {
                 pageInfo {
                     hasPreviousPage
                 }
             }
-        }"#;
+        }";
         let res = schema.execute(query).await;
         assert_eq!(
             res.data.to_string(),

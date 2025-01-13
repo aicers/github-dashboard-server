@@ -1,9 +1,10 @@
+use std::fmt;
+
 use anyhow::Context as AnyhowContext;
 use async_graphql::{
     connection::{query, Connection, EmptyFields},
     Context, Object, Result, SimpleObject,
 };
-use std::fmt;
 
 use crate::database::{self, Database, TryFromKeyValue};
 
@@ -22,10 +23,7 @@ impl TryFromKeyValue for Issue {
             .with_context(|| format!("invalid key in database: {key:02x?}"))?;
         let (title, author, _) = bincode::deserialize::<(String, String, Option<String>)>(value)
             .with_context(|| {
-                format!(
-                    "invalid value in database for key {:02x?}: {:02x?}",
-                    key, value
-                )
+                format!("invalid value in database for key {key:02x?}: {value:02x?}")
             })?;
         let issue = Issue {
             title,
@@ -49,9 +47,9 @@ pub(super) struct IssueQuery;
 
 #[Object]
 impl IssueQuery {
-    async fn issues<'ctx>(
+    async fn issues(
         &self,
-        ctx: &Context<'ctx>,
+        ctx: &Context<'_>,
         after: Option<String>,
         before: Option<String>,
         first: Option<i32>,
@@ -77,7 +75,7 @@ mod tests {
     #[tokio::test]
     async fn issues_empty() {
         let schema = TestSchema::new();
-        let query = r#"
+        let query = r"
         {
             issues {
                 edges {
@@ -86,7 +84,7 @@ mod tests {
                     }
                 }
             }
-        }"#;
+        }";
         let res = schema.execute(query).await;
         assert_eq!(res.data.to_string(), "{issues: {edges: []}}");
     }
@@ -116,7 +114,7 @@ mod tests {
         ];
         schema.db.insert_issues(issues, "owner", "name").unwrap();
 
-        let query = r#"
+        let query = r"
         {
             issues(first: 2) {
                 edges {
@@ -128,21 +126,21 @@ mod tests {
                     hasNextPage
                 }
             }
-        }"#;
+        }";
         let res = schema.execute(query).await;
         assert_eq!(
             res.data.to_string(),
             "{issues: {edges: [{node: {number: 1}},{node: {number: 2}}],pageInfo: {hasNextPage: true}}}"
         );
 
-        let query = r#"
+        let query = r"
         {
             issues(first: 5) {
                 pageInfo {
                     hasNextPage
                 }
             }
-        }"#;
+        }";
         let res = schema.execute(query).await;
         assert_eq!(
             res.data.to_string(),
@@ -175,7 +173,7 @@ mod tests {
         ];
         schema.db.insert_issues(issues, "owner", "name").unwrap();
 
-        let query = r#"
+        let query = r"
         {
             issues(last: 2) {
                 edges {
@@ -187,21 +185,21 @@ mod tests {
                     hasPreviousPage
                 }
             }
-        }"#;
+        }";
         let res = schema.execute(query).await;
         assert_eq!(
             res.data.to_string(),
             "{issues: {edges: [{node: {number: 2}},{node: {number: 3}}],pageInfo: {hasPreviousPage: true}}}"
         );
 
-        let query = r#"
+        let query = r"
         {
             issues(last: 5) {
                 pageInfo {
                     hasPreviousPage
                 }
             }
-        }"#;
+        }";
         let res = schema.execute(query).await;
         assert_eq!(
             res.data.to_string(),
