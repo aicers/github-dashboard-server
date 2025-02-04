@@ -1,15 +1,16 @@
-use crate::conf::RepoInfo;
-use anyhow::{anyhow, Result};
-use directories::ProjectDirs;
-use git2::{Cred, FetchOptions, RemoteCallbacks, Repository};
 use std::time::Duration;
 use std::{
     env::var,
     path::{Path, PathBuf},
     sync::Arc,
 };
+
+use anyhow::{anyhow, Result};
+use git2::{Cred, FetchOptions, RemoteCallbacks, Repository};
 use tokio::time;
 use tracing::{error, info};
+
+use crate::conf::RepoInfo;
 
 const FETCH_HEAD: &str = "FETCH_HEAD";
 const LOCAL_BASE_REPO: &str = "repos";
@@ -47,11 +48,16 @@ fn init_repo(repo_owner: &str, repo_name: &str, ssh: &str) -> Result<()> {
 }
 
 fn local_repo_path(repo_name: &str) -> Result<PathBuf> {
-    if let Some(proj_dirs) = ProjectDirs::from_path(PathBuf::from(LOCAL_BASE_REPO)) {
-        Ok(proj_dirs.cache_dir().join(repo_name))
-    } else {
-        Err(anyhow!("Faild to load cache directory"))
-    }
+    let cache_dir = var("XDG_CACHE_HOME")
+        .map(PathBuf::from)
+        .or_else(|_| {
+            var("HOME")
+                .map(PathBuf::from)
+                .map(|home| home.join(".cache"))
+        })
+        .map_err(|_| anyhow!("Failed to determine cache directory"))?;
+
+    Ok(cache_dir.join(LOCAL_BASE_REPO).join(repo_name))
 }
 
 fn pull_repo(name: &str, ssh: &str) -> Result<()> {

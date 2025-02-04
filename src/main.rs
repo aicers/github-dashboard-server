@@ -6,15 +6,17 @@ mod google;
 mod graphql;
 mod web;
 
-use crate::conf::PKG_NAME;
-use conf::{load_config, parse_socket_addr};
-use database::Database;
-use directories::ProjectDirs;
-use google::check_key;
+use std::env::var;
 use std::path::PathBuf;
 use std::process::exit;
 use std::sync::Arc;
+
+use conf::{load_config, parse_socket_addr};
+use database::Database;
+use google::check_key;
 use tokio::{task, time};
+
+use crate::conf::PKG_NAME;
 
 const USAGE: &str = "\
 USAGE:
@@ -41,8 +43,8 @@ async fn main() {
 
     let config_filename = if let Some(config_filename) = parse() {
         PathBuf::from(config_filename)
-    } else if let Some(proj_dirs) = ProjectDirs::from(QUALIFIER, ORGANIZATION, PKG_NAME) {
-        proj_dirs.config_dir().join(DEFAULT_CONFIG)
+    } else if let Some(config_path) = config_dir(PKG_NAME) {
+        config_path.join(DEFAULT_CONFIG)
     } else {
         eprintln!("No valid home directory path. Refer to usage. \n{USAGE}");
         exit(1);
@@ -130,4 +132,21 @@ fn parse() -> Option<String> {
     }
 
     Some(arg)
+}
+
+fn config_dir(pkg_name: &str) -> Option<PathBuf> {
+    var("XDG_CONFIG_HOME")
+        .map(PathBuf::from)
+        .or_else(|_| {
+            var("HOME")
+                .map(PathBuf::from)
+                .map(|home| home.join(".config"))
+        })
+        .ok()
+        .map(|base_config| {
+            base_config
+                .join(QUALIFIER)
+                .join(ORGANIZATION)
+                .join(pkg_name)
+        })
 }
