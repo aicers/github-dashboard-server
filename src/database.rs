@@ -1,13 +1,14 @@
-use crate::{
-    github::{GitHubIssue, GitHubPullRequests},
-    graphql::{Issue, PullRequest},
-};
+use std::{marker::PhantomData, path::Path};
+
 use anyhow::{anyhow, bail, Context, Result};
 use regex::Regex;
 use serde::Serialize;
 use sled::{Db, Tree};
-use std::{marker::PhantomData, path::Path};
 
+use crate::{
+    github::{GitHubIssue, GitHubPullRequests},
+    graphql::{Issue, PullRequest},
+};
 const ISSUE_TREE_NAME: &str = "issues";
 const PULL_REQUEST_TREE_NAME: &str = "pull_requests";
 
