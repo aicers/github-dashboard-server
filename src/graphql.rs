@@ -7,6 +7,7 @@ use async_graphql::{
     types::connection::{Connection, Edge, EmptyFields},
     Context, EmptyMutation, EmptySubscription, MergedObject, OutputType, Result,
 };
+use base64::{engine::general_purpose, Engine as _};
 
 pub use self::issue::Issue;
 pub use self::pull_request::PullRequest;
@@ -35,9 +36,10 @@ where
     let mut connection: Connection<String, T, EmptyFields, EmptyFields> =
         Connection::new(prev, next);
     for output in select_vec {
-        connection
-            .edges
-            .push(Edge::new(base64::encode(format!("{output}")), output));
+        connection.edges.push(Edge::new(
+            general_purpose::STANDARD.encode(format!("{output}")),
+            output,
+        ));
     }
     connection
 }
@@ -69,7 +71,7 @@ where
             return Err("'before' and 'first' cannot be specified simultaneously".into());
         }
         let last = last.unwrap_or(DEFAULT_PAGE_SIZE);
-        let cursor = base64::decode(before)?;
+        let cursor = general_purpose::STANDARD.decode(before)?;
         let iter = iter_builder(db, None, Some(cursor.as_slice())).rev();
         let (mut nodes, has_previous) = collect_nodes(iter, last)?;
         nodes.reverse();
@@ -82,7 +84,7 @@ where
             return Err("'after' and 'last' cannot be specified simultaneously".into());
         }
         let first = first.unwrap_or(DEFAULT_PAGE_SIZE);
-        let cursor = base64::decode(after)?;
+        let cursor = general_purpose::STANDARD.decode(after)?;
         let iter = iter_builder(db, Some(cursor.as_slice()), None);
         let (nodes, has_next) = collect_nodes(iter, first)?;
         (nodes, false, has_next)
