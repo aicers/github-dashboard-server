@@ -6,15 +6,17 @@ mod google;
 mod graphql;
 mod web;
 
-use crate::conf::PKG_NAME;
+use std::path::PathBuf;
+use std::process::exit;
+use std::sync::Arc;
+
 use conf::{load_config, parse_socket_addr};
 use database::Database;
 use directories::ProjectDirs;
 use google::check_key;
-use std::path::PathBuf;
-use std::process::exit;
-use std::sync::Arc;
 use tokio::{task, time};
+
+use crate::conf::PKG_NAME;
 
 const USAGE: &str = "\
 USAGE:

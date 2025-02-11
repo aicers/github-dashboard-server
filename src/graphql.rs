@@ -1,14 +1,16 @@
 mod issue;
 mod pull_request;
 
-pub use self::issue::Issue;
-pub use self::pull_request::PullRequest;
-use crate::database::Database;
+use std::fmt::Display;
+
 use async_graphql::{
     types::connection::{Connection, Edge, EmptyFields},
     Context, EmptyMutation, EmptySubscription, MergedObject, OutputType, Result,
 };
-use std::fmt::Display;
+
+pub use self::issue::Issue;
+pub use self::pull_request::PullRequest;
+use crate::database::Database;
 
 /// The default page size for connections when neither `first` nor `last` is
 /// provided.

@@ -1,16 +1,17 @@
-use crate::github::{
-    open_issues::OpenIssuesRepositoryIssuesNodesAuthor::User as userName,
-    pull_requests::PullRequestsRepositoryPullRequestsNodesReviewRequestsNodesRequestedReviewer::User,
-};
+use std::{sync::Arc, time::Duration};
+
 use anyhow::{bail, Result};
 use chrono::Utc;
 use graphql_client::{GraphQLQuery, QueryBody, Response as GraphQlResponse};
 use reqwest::{Client, RequestBuilder, Response};
 use serde::Serialize;
-use std::{sync::Arc, time::Duration};
 use tokio::time;
 use tracing::error;
 
+use crate::github::{
+    open_issues::OpenIssuesRepositoryIssuesNodesAuthor::User as userName,
+    pull_requests::PullRequestsRepositoryPullRequestsNodesReviewRequestsNodesRequestedReviewer::User,
+};
 use crate::{conf::RepoInfo, database::Database};
 
 const GITHUB_FETCH_SIZE: i64 = 10;

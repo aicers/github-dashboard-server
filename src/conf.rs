@@ -1,10 +1,11 @@
-use anyhow::{anyhow, bail, Result};
-use serde::Deserialize;
 use std::env;
 use std::fs::File;
 use std::io::prelude::*;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::path::Path;
+
+use anyhow::{anyhow, bail, Result};
+use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 pub struct ServerAddr {

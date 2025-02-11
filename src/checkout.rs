@@ -1,15 +1,17 @@
-use crate::conf::RepoInfo;
-use anyhow::{anyhow, Result};
-use directories::ProjectDirs;
-use git2::{Cred, FetchOptions, RemoteCallbacks, Repository};
 use std::time::Duration;
 use std::{
     env::var,
     path::{Path, PathBuf},
     sync::Arc,
 };
+
+use anyhow::{anyhow, Result};
+use directories::ProjectDirs;
+use git2::{Cred, FetchOptions, RemoteCallbacks, Repository};
 use tokio::time;
 use tracing::{error, info};
+
+use crate::conf::RepoInfo;
 
 const FETCH_HEAD: &str = "FETCH_HEAD";
 const LOCAL_BASE_REPO: &str = "repos";
