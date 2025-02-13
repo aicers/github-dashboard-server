@@ -22,10 +22,8 @@ impl TryFromKeyValue for PullRequest {
     fn try_from_key_value(key: &[u8], value: &[u8]) -> anyhow::Result<Self> {
         let (owner, repo, number) = database::parse_key(key)
             .with_context(|| format!("invalid key in database: {key:02x?}"))?;
-        let (title, assignees, reviewers) =
-            bincode::deserialize::<(String, Vec<String>, Vec<String>)>(value).with_context(
-                || format!("invalid value in database for key {key:02x?}: {value:02x?}"),
-            )?;
+        let deserialized = bincode::deserialize::<(String, Vec<String>, Vec<String>)>(value)?;
+        let (title, assignees, reviewers) = deserialized;
         let pr = PullRequest {
             title,
             assignees,
@@ -129,7 +127,7 @@ mod tests {
         let res = schema.execute(query).await;
         assert_eq!(
             res.data.to_string(),
-            "{pullRequests: {edges: [{node: {number: 1}}],pageInfo: {hasNextPage: true}}}"
+            "{pullRequests: {edges: [{node: {number: 1}}], pageInfo: {hasNextPage: true}}}"
         );
 
         let query = r"
@@ -185,7 +183,7 @@ mod tests {
         let res = schema.execute(query).await;
         assert_eq!(
             res.data.to_string(),
-            "{pullRequests: {edges: [{node: {number: 2}}],pageInfo: {hasPreviousPage: true}}}"
+            "{pullRequests: {edges: [{node: {number: 2}}], pageInfo: {hasPreviousPage: true}}}"
         );
 
         let query = r"

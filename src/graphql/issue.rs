@@ -21,10 +21,7 @@ impl TryFromKeyValue for Issue {
     fn try_from_key_value(key: &[u8], value: &[u8]) -> anyhow::Result<Self> {
         let (owner, repo, number) = database::parse_key(key)
             .with_context(|| format!("invalid key in database: {key:02x?}"))?;
-        let (title, author, _) = bincode::deserialize::<(String, String, Option<String>)>(value)
-            .with_context(|| {
-                format!("invalid value in database for key {key:02x?}: {value:02x?}")
-            })?;
+        let (title, author, _) = bincode::deserialize::<(String, String, Option<String>)>(value)?;
         let issue = Issue {
             title,
             author,
@@ -130,7 +127,7 @@ mod tests {
         let res = schema.execute(query).await;
         assert_eq!(
             res.data.to_string(),
-            "{issues: {edges: [{node: {number: 1}},{node: {number: 2}}],pageInfo: {hasNextPage: true}}}"
+            "{issues: {edges: [{node: {number: 1}}, {node: {number: 2}}], pageInfo: {hasNextPage: true}}}"
         );
 
         let query = r"
@@ -189,7 +186,7 @@ mod tests {
         let res = schema.execute(query).await;
         assert_eq!(
             res.data.to_string(),
-            "{issues: {edges: [{node: {number: 2}},{node: {number: 3}}],pageInfo: {hasPreviousPage: true}}}"
+            "{issues: {edges: [{node: {number: 2}}, {node: {number: 3}}], pageInfo: {hasPreviousPage: true}}}"
         );
 
         let query = r"
