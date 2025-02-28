@@ -4,7 +4,7 @@
 
 ## Usage
 
-Before running the app, create a toml extension file and write it in the format below.
+Before running the app, create a TOML configuration file in the following format:
 
 ```toml
 [web]
@@ -25,42 +25,47 @@ token = "github_token_info"
 ssh = ".ssh/id_ed25519"
 
 [database]
-db_name = "db_name"
+db_path = "db_path"
 ```
 
-* `address`: Address of web server.
-* `key`: tls key path of web server.
-* `cert`: tls cert path of web server.
-* `owner`: The owner of the github repository.
-* `names`: The name of the github repository.
-* `token`: Generated github access token value. (Token Generation: [github-access-token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token#creating-a-token))
-* `ssh`: Path to ssh private key for github code checkout.
-* `db_name`: The name of the db to create/connect.
+- `address`: The address of web server.
+- `key`: The TLS key path for the web server.
+- `cert`: The TLS certificate path for the web server.
+- `owner`: The owner of the GitHub repository.
+- `name`: The name of the GitHub repository.
+- `token`: The generated GitHub access token value. (Token generation guide: [GitHub-Access-Token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token#creating-a-token))
+- `ssh`: The path to SSH private key for GitHub code checkout.
+- `db_path`: The path to the database for creation/connection.
 
-Build and serve the app with Cargo as follows:
+### Running the App
+
+Build and serve the app using Cargo:
 
 ```sh
 cargo run [-- FLAGS | OPTION]
 ```
 
-When you run the program, server reads the config file from the default folder.
+When you run the program, the server reads the configuration file from the
+default directory.
 
-To run without giving the config file option, save the file to the path below.
+To run the application without specifying the configuration file path, save the
+file to one of the following locations:
 
-* Linux: `$HOME`/.config/github-dashboard-server/config.toml
-* macOS: `$HOME`/Library/Application Support/com.einsis.github-dashboard-server/config.toml
+- Linux: $HOME/.config/github-dashboard-server/config.toml
+- macOS: $HOME/Library/Application Support/com.einsis.github-dashboard-server/config.toml
 
-The web server will run using the address value in the config file.
+The web server will use the address value specified in the configuration file.
 
-Connect to `https://localhost:8000` in your browser to run the app,
+### Accessing the Web Interface
 
-* `https://localhost:8000/graphql/playground` to playground
+- Open <https://localhost:8000> in your browser to run the app.
+- Visit <https://localhost:8000/graphql/playground> to access the GraphQL playground.
 
 ## FLAGS
 
-* `-h`, `--help`: Prints help information
-* `-V`, `--version`: Prints version information
+- `-h`, `--help`: Displays help information.
+- `-V`, `--version`: Displays version information.
 
 ## OPTION
 
-* `config_file`: The path to the toml file containing server config info.
+- `config_file`: The path to the TOML file containing server configuration details.
