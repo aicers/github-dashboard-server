@@ -27,32 +27,32 @@ type DateTime = String;
     query_path = "src/open_issues.graphql",
     response_derives = "Debug"
 )]
-pub struct OpenIssues;
+struct OpenIssues;
 
 #[derive(GraphQLQuery)]
 #[graphql(
     schema_path = "src/github_schema.graphql",
     query_path = "src/pull_requests.graphql"
 )]
-pub struct PullRequests;
+struct PullRequests;
 
 #[derive(Debug)]
-pub struct GitHubIssue {
-    pub number: i64,
-    pub title: String,
-    pub author: String,
-    pub closed_at: Option<DateTime>,
+pub(super) struct GitHubIssue {
+    pub(super) number: i64,
+    pub(super) title: String,
+    pub(super) author: String,
+    pub(super) closed_at: Option<DateTime>,
 }
 
 #[derive(Debug)]
-pub struct GitHubPullRequests {
-    pub number: i64,
-    pub title: String,
-    pub assignees: Vec<String>,
-    pub reviewers: Vec<String>,
+pub(super) struct GitHubPullRequests {
+    pub(super) number: i64,
+    pub(super) title: String,
+    pub(super) assignees: Vec<String>,
+    pub(super) reviewers: Vec<String>,
 }
 
-pub async fn fetch_periodically(
+pub(super) async fn fetch_periodically(
     repositories: Arc<Vec<RepoInfo>>,
     token: String,
     period: Duration,

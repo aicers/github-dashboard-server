@@ -9,8 +9,8 @@ use async_graphql::{
 };
 use base64::{engine::general_purpose, Engine as _};
 
-pub use self::issue::Issue;
-pub use self::pull_request::PullRequest;
+pub(crate) use self::issue::Issue;
+pub(crate) use self::pull_request::PullRequest;
 use crate::database::Database;
 
 /// The default page size for connections when neither `first` nor `last` is
@@ -21,9 +21,9 @@ const DEFAULT_PAGE_SIZE: usize = 100;
 ///
 /// This is exposed only for [`Schema`], and not used directly.
 #[derive(Default, MergedObject)]
-pub struct Query(issue::IssueQuery, pull_request::PullRequestQuery);
+pub(crate) struct Query(issue::IssueQuery, pull_request::PullRequestQuery);
 
-pub type Schema = async_graphql::Schema<Query, EmptyMutation, EmptySubscription>;
+pub(crate) type Schema = async_graphql::Schema<Query, EmptyMutation, EmptySubscription>;
 
 fn connect_cursor<T>(
     select_vec: Vec<T>,
@@ -44,7 +44,7 @@ where
     connection
 }
 
-pub fn schema(database: Database) -> Schema {
+pub(crate) fn schema(database: Database) -> Schema {
     Schema::build(Query::default(), EmptyMutation, EmptySubscription)
         .data(database)
         .finish()
