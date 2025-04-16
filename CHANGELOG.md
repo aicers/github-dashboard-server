@@ -13,6 +13,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Configuration key `db_name` has been renamed to `db_path`.
 - GraphQL API `issues` and `pullRequests` return 100 items if neither `first`
   nor `last` is specified.
 - GraphQL API `issues` and `pullRequests` return an error if conflicting
