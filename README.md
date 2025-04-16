@@ -4,7 +4,8 @@
 
 ## Usage
 
-Before running the app, create a TOML configuration file in the following format:
+Before running the app, create a TOML configuration file in the following
+format:
 
 ```toml
 [web]
@@ -33,7 +34,13 @@ db_path = "db_path"
 - `cert`: The TLS certificate path for the web server.
 - `owner`: The owner of the GitHub repository.
 - `name`: The name of the GitHub repository.
-- `token`: The generated GitHub access token value. (Token generation guide: [GitHub-Access-Token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token#creating-a-token))
+- `token`: A Github fine-grained [personal access
+  token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-token).
+  The token's lifetime should be less than one year for security purposes.
+  Minimum required permissions are as follows:
+  - Repository: Access to all repositories
+  - Issues: Read-only access
+  - Pull Requests: Read-only access
 - `ssh`: The path to SSH private key for GitHub code checkout.
 - `db_path`: The path to the database for creation/connection.
 
