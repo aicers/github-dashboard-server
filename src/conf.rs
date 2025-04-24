@@ -28,7 +28,7 @@ pub struct Certification {
 
 #[derive(Debug, Deserialize)]
 pub struct Database {
-    pub db_name: String,
+    pub db_path: String,
 }
 
 #[derive(Debug, Deserialize)]

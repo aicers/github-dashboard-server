@@ -67,7 +67,7 @@ async fn main() {
         }
     };
 
-    let database = match Database::connect(config.database.db_name.as_ref()) {
+    let database = match Database::connect(config.database.db_path.as_ref()) {
         Ok(ret) => ret,
         Err(error) => {
             eprintln!("Problem while Connect Sled Database. {error}");
