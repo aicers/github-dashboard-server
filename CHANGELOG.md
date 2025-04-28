@@ -10,6 +10,8 @@ this project adheres to
 ### Added
 
 - Tracing with a filter set by `RUST_LOG` environment variable.
+- Added support for passing the SSH passphrase through the `SSH_PASSPHRASE`
+  environment variable.
 
 ### Changed
 
