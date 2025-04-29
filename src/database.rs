@@ -13,7 +13,7 @@ const ISSUE_TREE_NAME: &str = "issues";
 const PULL_REQUEST_TREE_NAME: &str = "pull_requests";
 
 #[derive(Clone)]
-pub struct Database {
+pub(crate) struct Database {
     db: Db,
     issue_tree: Tree,
     pull_request_tree: Tree,
@@ -30,7 +30,7 @@ impl Database {
         Ok((issue_tree, pull_request_tree))
     }
 
-    pub fn connect(db_path: &Path) -> Result<Database> {
+    pub(crate) fn connect(db_path: &Path) -> Result<Database> {
         let db = Database::connect_db(db_path)?;
         let (issue_tree, pull_request_tree) = Database::connect_trees(&db)?;
         Ok(Database {
@@ -45,21 +45,12 @@ impl Database {
         Ok(())
     }
 
-    #[allow(unused)]
-    pub fn select(key: &str, tree: &Tree) -> Result<String> {
-        if let Ok(Some(val)) = tree.get(key) {
-            let result: String = bincode::deserialize(&val)?;
-            return Ok(result);
-        }
-        bail!("Failed to get tree value");
-    }
-
-    pub fn insert_db<T: Serialize>(&self, key: &str, val: T) -> Result<()> {
+    pub(crate) fn insert_db<T: Serialize>(&self, key: &str, val: T) -> Result<()> {
         self.db.insert(key, bincode::serialize(&val)?)?;
         Ok(())
     }
 
-    pub fn select_db(&self, key: &str) -> Result<String> {
+    pub(crate) fn select_db(&self, key: &str) -> Result<String> {
         if let Ok(Some(val)) = self.db.get(key) {
             let result: String = bincode::deserialize(&val)?;
             return Ok(result);
@@ -67,7 +58,7 @@ impl Database {
         bail!("Failed to get db value");
     }
 
-    pub fn delete_db(&self, key: &str) -> Result<String> {
+    pub(crate) fn delete_db(&self, key: &str) -> Result<String> {
         if let Ok(Some(val)) = self.db.remove(key) {
             let result: String = bincode::deserialize(&val)?;
             return Ok(result);
@@ -75,22 +66,12 @@ impl Database {
         bail!("Failed to remove tree value");
     }
 
-    #[allow(unused)]
-    pub fn delete(key: &str, tree: &Tree) -> Result<String> {
-        if let Ok(Some(val)) = tree.remove(key) {
-            let result: String = bincode::deserialize(&val)?;
-            return Ok(result);
-        }
-        bail!("Failed to remove tree value");
-    }
-
-    #[allow(unused)]
-    pub fn delete_all(tree: &Tree) -> Result<()> {
-        tree.clear()?;
-        Ok(())
-    }
-
-    pub fn insert_issues(&self, resp: Vec<GitHubIssue>, owner: &str, name: &str) -> Result<()> {
+    pub(crate) fn insert_issues(
+        &self,
+        resp: Vec<GitHubIssue>,
+        owner: &str,
+        name: &str,
+    ) -> Result<()> {
         for item in resp {
             let keystr: String = format!("{owner}/{name}#{}", item.number);
             Database::insert(
@@ -102,7 +83,7 @@ impl Database {
         Ok(())
     }
 
-    pub fn insert_pull_requests(
+    pub(crate) fn insert_pull_requests(
         &self,
         resp: Vec<GitHubPullRequests>,
         owner: &str,
@@ -119,7 +100,7 @@ impl Database {
         Ok(())
     }
 
-    pub fn issues(&self, start: Option<&[u8]>, end: Option<&[u8]>) -> Iter<Issue> {
+    pub(crate) fn issues(&self, start: Option<&[u8]>, end: Option<&[u8]>) -> Iter<Issue> {
         let start = start.unwrap_or(b"\x00");
         if let Some(end) = end {
             self.issue_tree.range(start..end).into()
@@ -128,7 +109,11 @@ impl Database {
         }
     }
 
-    pub fn pull_requests(&self, start: Option<&[u8]>, end: Option<&[u8]>) -> Iter<PullRequest> {
+    pub(crate) fn pull_requests(
+        &self,
+        start: Option<&[u8]>,
+        end: Option<&[u8]>,
+    ) -> Iter<PullRequest> {
         let start = start.unwrap_or(b"\x00");
         if let Some(end) = end {
             self.pull_request_tree.range(start..end).into()
@@ -138,13 +123,13 @@ impl Database {
     }
 }
 
-pub trait TryFromKeyValue {
+pub(crate) trait TryFromKeyValue {
     fn try_from_key_value(key: &[u8], value: &[u8]) -> Result<Self>
     where
         Self: Sized;
 }
 
-pub struct Iter<T> {
+pub(crate) struct Iter<T> {
     inner: sled::Iter,
     phantom: PhantomData<T>,
 }
@@ -178,7 +163,7 @@ impl<T: TryFromKeyValue> DoubleEndedIterator for Iter<T> {
     }
 }
 
-pub fn parse_key(key: &[u8]) -> Result<(String, String, i64)> {
+pub(crate) fn parse_key(key: &[u8]) -> Result<(String, String, i64)> {
     let re = Regex::new(r"(?P<owner>\S+)/(?P<name>\S+)#(?P<number>[0-9]+)").expect("valid regex");
     if let Some(caps) = re.captures(
         String::from_utf8(key.to_vec())

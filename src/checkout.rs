@@ -76,7 +76,11 @@ fn pull_repo(name: &str, ssh: &str) -> Result<()> {
     Ok(())
 }
 
-pub async fn fetch_periodically(repositories: Arc<Vec<RepoInfo>>, duration: Duration, ssh: String) {
+pub(super) async fn fetch_periodically(
+    repositories: Arc<Vec<RepoInfo>>,
+    duration: Duration,
+    ssh: String,
+) {
     for repo_info in repositories.iter() {
         if let Err(error) = init_repo(&repo_info.owner, &repo_info.name, &ssh) {
             error!("{}", error);

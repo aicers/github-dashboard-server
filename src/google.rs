@@ -7,7 +7,7 @@ use crate::database::Database;
 const GOOGLE_PUBLIC_KEY: &str = "https://www.googleapis.com/oauth2/v3/certs";
 const APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
 
-pub async fn check_key(db: &Database) -> Result<bool> {
+pub(super) async fn check_key(db: &Database) -> Result<bool> {
     let result = get_key().await;
     match result {
         Ok(response) => {

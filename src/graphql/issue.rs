@@ -9,12 +9,12 @@ use async_graphql::{
 use crate::database::{self, Database, TryFromKeyValue};
 
 #[derive(SimpleObject)]
-pub struct Issue {
-    pub owner: String,
-    pub repo: String,
-    pub number: i32,
-    pub title: String,
-    pub author: String,
+pub(crate) struct Issue {
+    pub(crate) owner: String,
+    pub(crate) repo: String,
+    pub(crate) number: i32,
+    pub(crate) title: String,
+    pub(crate) author: String,
 }
 
 impl TryFromKeyValue for Issue {
