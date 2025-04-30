@@ -10,6 +10,8 @@ async-graphql-warp = "7"
 base64 = "0.22"
 bincode = "1"
 chrono = "0.4"
+clap = { version = "4", features = ["derive"] }
+config = { version = "0.15", features = ["toml"], default-features = false }
 directories = "6"
 git2 = "0.20"
 

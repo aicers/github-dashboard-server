@@ -8,11 +8,10 @@ use serde::Serialize;
 use tokio::time;
 use tracing::error;
 
-use crate::github::{
+use crate::{database::Database, github::{
     issues::IssuesRepositoryIssuesNodesAuthor::User as userName,
     pull_requests::PullRequestsRepositoryPullRequestsNodesReviewRequestsNodesRequestedReviewer::User,
-};
-use crate::{conf::RepoInfo, database::Database};
+}, settings::Repository as RepoInfo};
 
 const GITHUB_FETCH_SIZE: i64 = 10;
 const GITHUB_URL: &str = "https://api.github.com/graphql";
