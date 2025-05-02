@@ -34,7 +34,7 @@ const FIVE_MIN: u64 = 60 * 5;
 const DEFAULT_CONFIG: &str = "config.toml";
 const ONE_HOUR: u64 = 60 * 60;
 const ONE_DAY: u64 = ONE_HOUR * 24;
-const ORGANIZATION: &str = "einsis";
+const ORGANIZATION: &str = "cluml";
 const QUALIFIER: &str = "com";
 
 #[tokio::main]
