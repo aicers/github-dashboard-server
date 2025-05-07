@@ -18,12 +18,20 @@ const LOCAL_BASE_REPO: &str = "repos";
 const MAIN_BRANCH: &str = "main";
 const REMOTE_NAME: &str = "origin";
 const REMOTE_BASE_URL: &str = "git@github.com";
+const ENV_HOME: &str = "HOME";
+const ENV_SSH_PASSPHRASE: &str = "SSH_PASSPHRASE";
 
 fn callbacks(ssh: &str) -> Result<RemoteCallbacks> {
     let mut callbacks = RemoteCallbacks::new();
-    let ssh_path = Path::new(&var("HOME")?).join(ssh);
+    let ssh_path = Path::new(&var(ENV_HOME)?).join(ssh);
+    let passphrase = std::env::var(ENV_SSH_PASSPHRASE).ok();
     callbacks.credentials(move |_url, username_from_url, _allowed_types| {
-        Cred::ssh_key(username_from_url.unwrap(), None, &ssh_path, None)
+        Cred::ssh_key(
+            username_from_url.unwrap(),
+            None,
+            &ssh_path,
+            passphrase.as_deref(),
+        )
     });
     Ok(callbacks)
 }

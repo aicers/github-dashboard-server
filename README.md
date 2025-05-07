@@ -42,6 +42,7 @@ db_path = "db_path"
   - Issues: Read-only access
   - Pull Requests: Read-only access
 - `ssh`: The path to SSH private key for GitHub code checkout.
+  - To provide an SSH passphrase, set the `SSH_PASSPHRASE` environment variable.
 - `db_path`: The path to the database for creation/connection.
 
 ### Running the App
