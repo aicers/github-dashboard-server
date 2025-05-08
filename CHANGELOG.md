@@ -20,6 +20,10 @@ this project adheres to
   nor `last` is specified.
 - GraphQL API `issues` and `pullRequests` return an error if conflicting
   pagination arguments (e.g., `first` and `before`) are provided simultaneously.
+- Replaced file-based config loading with the `config` crate.
+- Config file must now be specified with `-c <CONFIG_PATH>`
+- `--key` and `--cert` are now required as CLI options instead of being set in
+  the config file
 
 ### Fixed
 
@@ -33,6 +37,5 @@ this project adheres to
 
 - Initial release.
 
-[Unreleased]:
-  https://github.com/aicers/github-dashboard-server/compare/0.1.0...main
+[Unreleased]: https://github.com/aicers/github-dashboard-server/compare/0.1.0...main
 [0.1.0]: https://github.com/aicers/github-dashboard-server/tree/0.1.0
