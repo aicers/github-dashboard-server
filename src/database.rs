@@ -6,8 +6,8 @@ use serde::Serialize;
 use sled::{Db, Tree};
 
 use crate::{
+    api::{Issue, PullRequest},
     github::{GitHubIssue, GitHubPullRequests},
-    graphql::{Issue, PullRequest},
 };
 const ISSUE_TREE_NAME: &str = "issues";
 const PULL_REQUEST_TREE_NAME: &str = "pull_requests";

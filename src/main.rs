@@ -1,9 +1,9 @@
+mod api;
 mod checkout;
 mod conf;
 mod database;
 mod github;
 mod google;
-mod graphql;
 mod web;
 
 use std::path::PathBuf;
@@ -101,7 +101,7 @@ async fn main() {
         config.certification.ssh,
     ));
 
-    let schema = graphql::schema(database);
+    let schema = api::schema(database);
     web::serve(schema, socket_addr, &config.web.key, &config.web.cert).await;
 }
 
