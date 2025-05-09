@@ -5,7 +5,7 @@ query Issues(
   $last: Int
   $before: String
   $after: String
-  $lasttime: DateTime!
+  $since: DateTime
 ) {
   repository(owner: $owner, name: $name) {
     issues(
@@ -13,7 +13,7 @@ query Issues(
       last: $last
       before: $before
       after: $after
-      filterBy: { since: $lasttime }
+      filterBy: { since: $since }
     ) {
       pageInfo {
         hasNextPage
@@ -22,7 +22,13 @@ query Issues(
       nodes {
         number
         title
+        state
+        createdAt
+        updatedAt
         closedAt
+        repository {
+          name
+        }
         author {
           __typename
           ... on User {
