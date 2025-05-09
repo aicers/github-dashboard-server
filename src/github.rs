@@ -23,16 +23,16 @@ type DateTime = String;
 
 #[derive(GraphQLQuery)]
 #[graphql(
-    schema_path = "src/github_schema.graphql",
-    query_path = "src/issues.graphql",
+    schema_path = "src/github/schema.graphql",
+    query_path = "src/github/issues.graphql",
     response_derives = "Debug"
 )]
 struct Issues;
 
 #[derive(GraphQLQuery)]
 #[graphql(
-    schema_path = "src/github_schema.graphql",
-    query_path = "src/pull_requests.graphql"
+    schema_path = "src/github/schema.graphql",
+    query_path = "src/github/pull_requests.graphql"
 )]
 struct PullRequests;
 
