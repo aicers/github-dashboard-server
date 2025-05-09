@@ -9,7 +9,7 @@ use tokio::time;
 use tracing::error;
 
 use crate::github::{
-    open_issues::OpenIssuesRepositoryIssuesNodesAuthor::User as userName,
+    issues::IssuesRepositoryIssuesNodesAuthor::User as userName,
     pull_requests::PullRequestsRepositoryPullRequestsNodesReviewRequestsNodesRequestedReviewer::User,
 };
 use crate::{conf::RepoInfo, database::Database};
@@ -24,10 +24,10 @@ type DateTime = String;
 #[derive(GraphQLQuery)]
 #[graphql(
     schema_path = "src/github_schema.graphql",
-    query_path = "src/open_issues.graphql",
+    query_path = "src/issues.graphql",
     response_derives = "Debug"
 )]
-struct OpenIssues;
+struct Issues;
 
 #[derive(GraphQLQuery)]
 #[graphql(
@@ -128,7 +128,7 @@ async fn send_github_issue_query(
     let mut end_cur: Option<String> = None;
     let mut issues: Vec<GitHubIssue> = Vec::new();
     loop {
-        let var = open_issues::Variables {
+        let var = issues::Variables {
             owner: owner.to_string(),
             name: name.to_string(),
             first: Some(GITHUB_FETCH_SIZE),
@@ -137,8 +137,8 @@ async fn send_github_issue_query(
             after: end_cur,
             lasttime: last_time.to_string(),
         };
-        let resp_body: GraphQlResponse<open_issues::ResponseData> =
-            send_query::<OpenIssues>(token, var).await?.json().await?;
+        let resp_body: GraphQlResponse<issues::ResponseData> =
+            send_query::<Issues>(token, var).await?.json().await?;
         if let Some(data) = resp_body.data {
             if let Some(repository) = data.repository {
                 if let Some(nodes) = repository.issues.nodes.as_ref() {
