@@ -1,0 +1,35 @@
+query Issues(
+  $owner: String!
+  $name: String!
+  $first: Int
+  $last: Int
+  $before: String
+  $after: String
+  $lasttime: DateTime!
+) {
+  repository(owner: $owner, name: $name) {
+    issues(
+      first: $first
+      last: $last
+      before: $before
+      after: $after
+      filterBy: { since: $lasttime }
+    ) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      nodes {
+        number
+        title
+        closedAt
+        author {
+          __typename
+          ... on User {
+            login
+          }
+        }
+      }
+    }
+  }
+}
