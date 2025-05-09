@@ -61,7 +61,7 @@ file to one of the following locations:
 
 - Linux: $HOME/.config/github-dashboard-server/config.toml
 - macOS: $HOME/Library/Application
-  Support/com.einsis.github-dashboard-server/config.toml
+  Support/com.cluml.github-dashboard-server/config.toml
 
 The web server will use the address value specified in the configuration file.
 
