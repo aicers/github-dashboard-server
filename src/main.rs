@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use std::process::exit;
 use std::sync::Arc;
 
+use anyhow::{Context, Result};
 use conf::{load_config, parse_socket_addr};
 use database::Database;
 use directories::ProjectDirs;
@@ -38,7 +39,7 @@ const ORGANIZATION: &str = "cluml";
 const QUALIFIER: &str = "com";
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<()> {
     println!("AICE GitHub Dashboard Server");
 
     let config_filename = if let Some(config_filename) = parse() {
@@ -50,38 +51,18 @@ async fn main() {
         exit(1);
     };
 
-    let config = match load_config(&config_filename) {
-        Ok(ret) => ret,
-        Err(error) => {
-            eprintln!("Problem while loading config. {error}");
-            exit(1);
-        }
-    };
+    let config = load_config(&config_filename).context("Problem while loading config.")?;
     let repositories = Arc::new(config.repositories);
 
-    let socket_addr = match parse_socket_addr(&config.web.address) {
-        Ok(ret) => ret,
-        Err(error) => {
-            eprintln!("Problem while parsing socket address. {error}");
-            exit(1);
-        }
-    };
+    let socket_addr =
+        parse_socket_addr(&config.web.address).context("Problem while parsing socket address.")?;
 
-    let database = match Database::connect(config.database.db_path.as_ref()) {
-        Ok(ret) => ret,
-        Err(error) => {
-            eprintln!("Problem while Connect Sled Database. {error}");
-            exit(1);
-        }
-    };
+    let database = Database::connect(config.database.db_path.as_ref())
+        .context("Problem while Connect Sled Database.")?;
 
-    match check_key(&database.clone()).await {
-        Ok(ret) => ret,
-        Err(error) => {
-            eprintln!("Problem while checking for public Google key. {error}");
-            exit(1);
-        }
-    };
+    check_key(&database.clone())
+        .await
+        .context("Problem while checking for public Google key.")?;
 
     tracing_subscriber::fmt::init();
 
@@ -103,6 +84,7 @@ async fn main() {
 
     let schema = graphql::schema(database);
     web::serve(schema, socket_addr, &config.web.key, &config.web.cert).await;
+    Ok(())
 }
 
 /// Parses the command line arguments and returns the first argument.

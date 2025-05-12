@@ -4,7 +4,7 @@ use std::io::prelude::*;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::path::Path;
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -47,15 +47,8 @@ pub(super) fn load_config(path: &Path) -> Result<Config> {
     if let Err(e) = File::open(path).and_then(|mut f| f.read_to_string(&mut config_str)) {
         bail!("Failed to open file, Please check file name: {:?}", e);
     }
-    let config = match toml::from_str::<Config>(&config_str) {
-        Ok(ret) => ret,
-        Err(e) => {
-            bail!(
-                "Failed to parse Toml document, Please check file contents: {:?}",
-                e
-            );
-        }
-    };
+    let config = toml::from_str(&config_str)
+        .context("Failed to parse Toml document, Please check file contents")?;
     Ok(config)
 }
 
