@@ -58,14 +58,6 @@ impl Database {
         bail!("Failed to get db value");
     }
 
-    pub(crate) fn delete_db(&self, key: &str) -> Result<String> {
-        if let Ok(Some(val)) = self.db.remove(key) {
-            let result: String = bincode::deserialize(&val)?;
-            return Ok(result);
-        }
-        bail!("Failed to remove tree value");
-    }
-
     pub(crate) fn insert_issues(
         &self,
         resp: Vec<GitHubIssue>,
