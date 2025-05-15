@@ -10,8 +10,6 @@ format:
 ```toml
 [web]
 address = "127.0.0.1:8000"
-key = "key_path"
-cert = "cert_path"
 
 [[repositories]]
 owner = "aicers"
@@ -26,12 +24,10 @@ token = "github_token_info"
 ssh = ".ssh/id_ed25519"
 
 [database]
-db_path = "db_path"
+db_path = "github-dashboard"
 ```
 
-- `address`: The address of web server.
-- `key`: The TLS key path for the web server.
-- `cert`: The TLS certificate path for the web server.
+- `address`: IP address and port the web server listens on. (Default: 127.0.0.1:8000)
 - `owner`: The owner of the GitHub repository.
 - `name`: The name of the GitHub repository.
 - `token`: A Github fine-grained
@@ -43,27 +39,30 @@ db_path = "db_path"
   - Pull Requests: Read-only access
 - `ssh`: The path to SSH private key for GitHub code checkout.
   - To provide an SSH passphrase, set the `SSH_PASSPHRASE` environment variable.
-- `db_path`: The path to the database for creation/connection.
+- `db_path`: Folder where the sled database files are stored. Created
+  automatically if it doesn’t exist. (Default: github-dashboard)
 
 ### Running the App
 
-Build and serve the app using Cargo:
+Run app with the prepared configuration file and following command.
 
 ```sh
-cargo run [-- FLAGS | OPTION]
+cargo run -- -c <CONFIG_PATH> \
+--cert <CERT_PATH> \
+--key <KEY_PATH>
 ```
 
-When you run the program, the server reads the configuration file from the
-default directory.
+### Arguments
 
-To run the application without specifying the configuration file path, save the
-file to one of the following locations:
+<!-- markdownlint-disable -->
 
-- Linux: $HOME/.config/github-dashboard-server/config.toml
-- macOS: $HOME/Library/Application
-  Support/com.cluml.github-dashboard-server/config.toml
+| Name            | Description                          | Required |
+| --------------- | ------------------------------------ | -------- |
+| `<CONFIG_PATH>` | Path to the TOML configuration file. | Yes      |
+| `<CERT_PATH>`   | Path to the certificate file.        | Yes      |
+| `<KEY_PATH>`    | Path to the private key file.        | Yes      |
 
-The web server will use the address value specified in the configuration file.
+<!-- markdownlint-enable -->
 
 ### Accessing the Web Interface
 
@@ -75,8 +74,3 @@ The web server will use the address value specified in the configuration file.
 
 - `-h`, `--help`: Displays help information.
 - `-V`, `--version`: Displays version information.
-
-## OPTION
-
-- `config_file`: The path to the TOML file containing server configuration
-  details.
