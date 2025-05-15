@@ -1,14 +1,34 @@
-query OpenIssues($owner: String!, $name: String!, $first: Int, $last: Int, $before: String, $after: String, $lasttime: DateTime!) {
-  repository(owner: $owner name: $name) {
-    issues(first: $first last: $last before: $before after: $after filterBy: { since: $lasttime }) {
+query OpenIssues(
+  $owner: String!
+  $name: String!
+  $first: Int
+  $last: Int
+  $before: String
+  $after: String
+  $since: DateTime
+) {
+  repository(owner: $owner, name: $name) {
+    issues(
+      first: $first
+      last: $last
+      before: $before
+      after: $after
+      filterBy: { since: $since }
+    ) {
       pageInfo {
-        hasNextPage,
-        endCursor,
+        hasNextPage
+        endCursor
       }
       nodes {
-        number,
-        title,
-        closedAt,
+        number
+        title
+        state
+        createdAt
+        updatedAt
+        closedAt
+        repository {
+          name
+        }
         author {
           __typename
           ... on User {
