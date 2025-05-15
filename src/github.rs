@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use chrono::Utc;
 use graphql_client::{GraphQLQuery, QueryBody, Response as GraphQlResponse};
 use reqwest::{Client, RequestBuilder, Response};
@@ -145,7 +145,7 @@ async fn send_github_issue_query(
                     for issue in nodes.iter().flatten() {
                         let mut author: String = String::new();
 
-                        let author_ref = issue.author.as_ref().unwrap();
+                        let author_ref = issue.author.as_ref().context("Missing issue author")?;
                         if let userName(on_user) = author_ref {
                             author.clone_from(&on_user.login.clone());
                         }
@@ -197,19 +197,23 @@ async fn send_github_pr_query(
                         let mut assignees: Vec<String> = Vec::new();
                         let mut reviewers: Vec<String> = Vec::new();
 
-                        let assignees_nodes = pr.assignees.nodes.as_ref().unwrap();
-                        let reviewers_nodes =
-                            pr.review_requests.as_ref().unwrap().nodes.as_ref().unwrap();
-
-                        for pr_assignees in assignees_nodes.iter().flatten() {
-                            assignees.push(pr_assignees.login.clone());
-                        }
-                        for pr_reviewers in reviewers_nodes.iter().flatten() {
-                            let req_reviewers = pr_reviewers.requested_reviewer.as_ref().unwrap();
-                            if let User(on_user) = req_reviewers {
-                                reviewers.push(on_user.login.clone());
+                        if let Some(assignees_nodes) = pr.assignees.nodes.as_ref() {
+                            for pr_assignees in assignees_nodes.iter().flatten() {
+                                assignees.push(pr_assignees.login.clone());
                             }
                         }
+                        if let Some(reviewers_nodes) =
+                            pr.review_requests.as_ref().and_then(|r| r.nodes.as_ref())
+                        {
+                            for pr_reviewers in reviewers_nodes.iter().flatten() {
+                                if let Some(User(on_user)) =
+                                    pr_reviewers.requested_reviewer.as_ref()
+                                {
+                                    reviewers.push(on_user.login.clone());
+                                }
+                            }
+                        }
+
                         prs.push(GitHubPullRequests {
                             number: pr.number,
                             title: pr.title.to_string(),
