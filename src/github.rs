@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use anyhow::{bail, Context, Result};
+use anyhow::Result;
 use chrono::Utc;
 use graphql_client::{GraphQLQuery, QueryBody, Response as GraphQlResponse};
 use reqwest::{Client, RequestBuilder, Response};
@@ -8,10 +8,8 @@ use serde::Serialize;
 use tokio::time;
 use tracing::error;
 
-use crate::{database::Database, github::{
-    issues::IssuesRepositoryIssuesNodesAuthor::User as userName,
-    pull_requests::PullRequestsRepositoryPullRequestsNodesReviewRequestsNodesRequestedReviewer::User,
-}, settings::Repository as RepoInfo};
+use crate::graphql::{Issue, PullRequest};
+use crate::{database::Database, settings::Repository as RepoInfo};
 
 const GITHUB_FETCH_SIZE: i64 = 10;
 const GITHUB_URL: &str = "https://api.github.com/graphql";
@@ -26,29 +24,65 @@ type DateTime = String;
     query_path = "src/github/issues.graphql",
     response_derives = "Debug"
 )]
-struct Issues;
+pub(crate) struct Issues;
+
+impl issues::ResponseData {
+    pub(crate) fn collect_issues(self) -> Vec<Issue> {
+        self.repository
+            .and_then(|repository| {
+                repository.issues.nodes.map(|nodes| {
+                    nodes
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|node| Issue::try_from(node).ok())
+                        .collect()
+                })
+            })
+            .unwrap_or_default()
+    }
+
+    pub(crate) fn has_next_page(&self) -> Option<String> {
+        self.repository.as_ref().and_then(|repository| {
+            if repository.issues.page_info.has_next_page {
+                repository.issues.page_info.end_cursor.clone()
+            } else {
+                None
+            }
+        })
+    }
+}
 
 #[derive(GraphQLQuery)]
 #[graphql(
     schema_path = "src/github/schema.graphql",
     query_path = "src/github/pull_requests.graphql"
 )]
-struct PullRequests;
+pub(crate) struct PullRequests;
 
-#[derive(Debug)]
-pub(super) struct GitHubIssue {
-    pub(super) number: i64,
-    pub(super) title: String,
-    pub(super) author: String,
-    pub(super) closed_at: Option<DateTime>,
-}
+impl pull_requests::ResponseData {
+    pub(crate) fn collect_pull_requests(self) -> Vec<PullRequest> {
+        self.repository
+            .and_then(|repository| {
+                repository.pull_requests.nodes.map(|nodes| {
+                    nodes
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|node| PullRequest::try_from(node).ok())
+                        .collect()
+                })
+            })
+            .unwrap_or_default()
+    }
 
-#[derive(Debug)]
-pub(super) struct GitHubPullRequests {
-    pub(super) number: i64,
-    pub(super) title: String,
-    pub(super) assignees: Vec<String>,
-    pub(super) reviewers: Vec<String>,
+    pub(crate) fn has_next_page(&self) -> Option<String> {
+        self.repository.as_ref().and_then(|repository| {
+            if repository.pull_requests.page_info.has_next_page {
+                repository.pull_requests.page_info.end_cursor.clone()
+            } else {
+                None
+            }
+        })
+    }
 }
 
 pub(super) async fn fetch_periodically(
@@ -69,19 +103,14 @@ pub(super) async fn fetch_periodically(
             error!("Insert DateTime Error: {}", e);
         }
 
-        for repoinfo in repositories.iter() {
+        for repo in repositories.iter() {
             let mut re_itv = time::interval(retry);
             loop {
                 re_itv.tick().await;
-                match send_github_issue_query(&repoinfo.owner, &repoinfo.name, &since, &token).await
-                {
-                    Ok(resps) => {
-                        for resp in resps {
-                            if let Err(error) =
-                                db.insert_issues(resp, &repoinfo.owner, &repoinfo.name)
-                            {
-                                error!("Problem while insert Sled Database. {}", error);
-                            }
+                match send_github_issue_query(&repo.owner, &repo.name, &since, &token).await {
+                    Ok(issues) => {
+                        if let Err(error) = db.insert_issues(issues, &repo.owner, &repo.name) {
+                            error!("Problem while insert Sled Database. {}", error);
                         }
                         break;
                     }
@@ -95,14 +124,10 @@ pub(super) async fn fetch_periodically(
             let mut re_itv = time::interval(retry);
             loop {
                 re_itv.tick().await;
-                match send_github_pr_query(&repoinfo.owner, &repoinfo.name, &token).await {
-                    Ok(resps) => {
-                        for resp in resps {
-                            if let Err(error) =
-                                db.insert_pull_requests(resp, &repoinfo.owner, &repoinfo.name)
-                            {
-                                error!("Problem while insert Sled Database. {}", error);
-                            }
+                match send_github_pr_query(&repo.owner, &repo.name, &token).await {
+                    Ok(prs) => {
+                        if let Err(error) = db.insert_pull_requests(prs, &repo.owner, &repo.name) {
+                            error!("Problem while insert Sled Database. {}", error);
                         }
                         break;
                     }
@@ -121,10 +146,9 @@ async fn send_github_issue_query(
     name: &str,
     since: &str,
     token: &str,
-) -> Result<Vec<Vec<GitHubIssue>>> {
-    let mut total_issue = Vec::new();
+) -> Result<Vec<Issue>> {
     let mut end_cur: Option<String> = None;
-    let mut issues: Vec<GitHubIssue> = Vec::new();
+    let mut issues: Vec<Issue> = Vec::new();
     loop {
         let var = issues::Variables {
             owner: owner.to_string(),
@@ -135,47 +159,29 @@ async fn send_github_issue_query(
             after: end_cur,
             since: Some(since.to_string()),
         };
-        let resp_body: GraphQlResponse<issues::ResponseData> =
+        let response: GraphQlResponse<issues::ResponseData> =
             send_query::<Issues>(token, var).await?.json().await?;
-        if let Some(data) = resp_body.data {
-            if let Some(repository) = data.repository {
-                if let Some(nodes) = repository.issues.nodes.as_ref() {
-                    for issue in nodes.iter().flatten() {
-                        let mut author: String = String::new();
 
-                        let author_ref = issue.author.as_ref().context("Missing issue author")?;
-                        if let userName(on_user) = author_ref {
-                            author.clone_from(&on_user.login.clone());
-                        }
-                        issues.push(GitHubIssue {
-                            number: issue.number,
-                            title: issue.title.to_string(),
-                            author,
-                            closed_at: issue.closed_at.clone(),
-                        });
-                    }
-                    if !repository.issues.page_info.has_next_page {
-                        total_issue.push(issues);
-                        break;
-                    }
-                    end_cur = repository.issues.page_info.end_cursor;
-                    continue;
-                }
-            }
+        end_cur = response
+            .data
+            .as_ref()
+            .and_then(issues::ResponseData::has_next_page);
+        issues.extend(
+            response
+                .data
+                .map(issues::ResponseData::collect_issues)
+                .unwrap_or_default(),
+        );
+        if end_cur.is_none() {
+            break;
         }
-        bail!("Failed to parse response data");
     }
-    Ok(total_issue)
+    Ok(issues)
 }
 
-async fn send_github_pr_query(
-    owner: &str,
-    name: &str,
-    token: &str,
-) -> Result<Vec<Vec<GitHubPullRequests>>> {
-    let mut total_prs = Vec::new();
+async fn send_github_pr_query(owner: &str, name: &str, token: &str) -> Result<Vec<PullRequest>> {
     let mut end_cur: Option<String> = None;
-    let mut prs: Vec<GitHubPullRequests> = Vec::new();
+    let mut prs: Vec<PullRequest> = Vec::new();
     loop {
         let var = pull_requests::Variables {
             owner: owner.to_string(),
@@ -185,54 +191,24 @@ async fn send_github_pr_query(
             before: None,
             after: end_cur,
         };
-
-        let resp_body: GraphQlResponse<pull_requests::ResponseData> =
+        let response: GraphQlResponse<pull_requests::ResponseData> =
             send_query::<PullRequests>(token, var).await?.json().await?;
-        if let Some(data) = resp_body.data {
-            if let Some(repository) = data.repository {
-                if let Some(nodes) = repository.pull_requests.nodes.as_ref() {
-                    for pr in nodes.iter().flatten() {
-                        let mut assignees: Vec<String> = Vec::new();
-                        let mut reviewers: Vec<String> = Vec::new();
 
-                        if let Some(assignees_nodes) = pr.assignees.nodes.as_ref() {
-                            for pr_assignees in assignees_nodes.iter().flatten() {
-                                assignees.push(pr_assignees.login.clone());
-                            }
-                        }
-                        if let Some(reviewers_nodes) =
-                            pr.review_requests.as_ref().and_then(|r| r.nodes.as_ref())
-                        {
-                            for pr_reviewers in reviewers_nodes.iter().flatten() {
-                                if let Some(User(on_user)) =
-                                    pr_reviewers.requested_reviewer.as_ref()
-                                {
-                                    reviewers.push(on_user.login.clone());
-                                }
-                            }
-                        }
-
-                        prs.push(GitHubPullRequests {
-                            number: pr.number,
-                            title: pr.title.to_string(),
-                            assignees,
-                            reviewers,
-                        });
-                    }
-                    if !repository.pull_requests.page_info.has_next_page {
-                        total_prs.push(prs);
-                        break;
-                    }
-                    end_cur = repository.pull_requests.page_info.end_cursor;
-                    continue;
-                }
-                end_cur = repository.pull_requests.page_info.end_cursor;
-                continue;
-            }
+        end_cur = response
+            .data
+            .as_ref()
+            .and_then(pull_requests::ResponseData::has_next_page);
+        prs.extend(
+            response
+                .data
+                .map(pull_requests::ResponseData::collect_pull_requests)
+                .unwrap_or_default(),
+        );
+        if end_cur.is_none() {
+            break;
         }
-        bail!("Failed to parse response data");
     }
-    Ok(total_prs)
+    Ok(prs)
 }
 
 fn request<V>(request_body: &QueryBody<V>, token: &str) -> Result<RequestBuilder>

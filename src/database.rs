@@ -1,14 +1,10 @@
 use std::{marker::PhantomData, path::Path};
 
-use anyhow::{anyhow, bail, Context, Result};
-use regex::Regex;
+use anyhow::{bail, Result};
 use serde::Serialize;
 use sled::{Db, Tree};
 
-use crate::{
-    github::{GitHubIssue, GitHubPullRequests},
-    graphql::{Issue, PullRequest},
-};
+use crate::graphql::{Issue, PullRequest};
 const ISSUE_TREE_NAME: &str = "issues";
 const PULL_REQUEST_TREE_NAME: &str = "pull_requests";
 
@@ -58,36 +54,23 @@ impl Database {
         bail!("Failed to get db value");
     }
 
-    pub(crate) fn insert_issues(
-        &self,
-        resp: Vec<GitHubIssue>,
-        owner: &str,
-        name: &str,
-    ) -> Result<()> {
+    pub(crate) fn insert_issues(&self, resp: Vec<Issue>, owner: &str, name: &str) -> Result<()> {
         for item in resp {
-            let keystr: String = format!("{owner}/{name}#{}", item.number);
-            Database::insert(
-                &keystr,
-                (&item.title, &item.author, &item.closed_at),
-                &self.issue_tree,
-            )?;
+            let key: String = format!("{owner}/{name}#{}", item.number);
+            Database::insert(&key, item, &self.issue_tree)?;
         }
         Ok(())
     }
 
     pub(crate) fn insert_pull_requests(
         &self,
-        resp: Vec<GitHubPullRequests>,
+        resp: Vec<PullRequest>,
         owner: &str,
         name: &str,
     ) -> Result<()> {
         for item in resp {
-            let keystr: String = format!("{owner}/{name}#{}", item.number);
-            Database::insert(
-                &keystr,
-                (&item.title, &item.assignees, &item.reviewers),
-                &self.pull_request_tree,
-            )?;
+            let key: String = format!("{owner}/{name}#{}", item.number);
+            Database::insert(&key, item, &self.pull_request_tree)?;
         }
         Ok(())
     }
@@ -152,45 +135,5 @@ impl<T: TryFromKeyValue> DoubleEndedIterator for Iter<T> {
             let (key, value) = item?;
             T::try_from_key_value(&key, &value)
         })
-    }
-}
-
-pub(crate) fn parse_key(key: &[u8]) -> Result<(String, String, i64)> {
-    let re = Regex::new(r"(?P<owner>\S+)/(?P<name>\S+)#(?P<number>[0-9]+)").expect("valid regex");
-    if let Some(caps) = re.captures(
-        String::from_utf8(key.to_vec())
-            .context("invalid key")?
-            .as_str(),
-    ) {
-        let owner = caps
-            .name("owner")
-            .ok_or_else(|| anyhow!("invalid key"))?
-            .as_str()
-            .to_string();
-        let name = caps
-            .name("name")
-            .ok_or_else(|| anyhow!("invalid key"))?
-            .as_str()
-            .to_string();
-        let number = caps
-            .name("number")
-            .ok_or_else(|| anyhow!("invalid key"))?
-            .as_str()
-            .parse::<i64>()
-            .context("invalid key")?;
-        Ok((owner, name, number))
-    } else {
-        Err(anyhow!("invalid key"))
-    }
-}
-
-mod tests {
-    #[test]
-    fn test_parse_key() {
-        let key = "rust-lang/rust#12345";
-        let (owner, name, number) = super::parse_key(key.as_bytes()).unwrap();
-        assert_eq!(owner, "rust-lang");
-        assert_eq!(name, "rust");
-        assert_eq!(number, 12345);
     }
 }

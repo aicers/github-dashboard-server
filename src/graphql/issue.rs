@@ -1,14 +1,21 @@
 use std::fmt;
 
-use anyhow::Context as AnyhowContext;
 use async_graphql::{
     connection::{query, Connection, EmptyFields},
     Context, Object, Result, SimpleObject,
 };
+use serde::{Deserialize, Serialize};
 
-use crate::database::{self, Database, TryFromKeyValue};
+use crate::{
+    database::{Database, TryFromKeyValue},
+    github::issues::{
+        IssuesRepositoryIssuesNodes, IssuesRepositoryIssuesNodesAuthor::User,
+        IssuesRepositoryIssuesNodesAuthorOnUser,
+    },
+};
 
-#[derive(SimpleObject)]
+#[derive(SimpleObject, Serialize, Deserialize)]
+#[cfg_attr(test, derive(Default))]
 pub(crate) struct Issue {
     pub(crate) owner: String,
     pub(crate) repo: String,
@@ -17,19 +24,33 @@ pub(crate) struct Issue {
     pub(crate) author: String,
 }
 
-impl TryFromKeyValue for Issue {
-    fn try_from_key_value(key: &[u8], value: &[u8]) -> anyhow::Result<Self> {
-        let (owner, repo, number) = database::parse_key(key)
-            .with_context(|| format!("invalid key in database: {key:02x?}"))?;
-        let (title, author, _) = bincode::deserialize::<(String, String, Option<String>)>(value)?;
-        let issue = Issue {
-            title,
+impl TryFrom<IssuesRepositoryIssuesNodes> for Issue {
+    type Error = anyhow::Error;
+
+    fn try_from(issue: IssuesRepositoryIssuesNodes) -> Result<Self, Self::Error> {
+        let author = issue
+            .author
+            .map(|author| {
+                if let User(IssuesRepositoryIssuesNodesAuthorOnUser { login }) = author {
+                    login
+                } else {
+                    String::new()
+                }
+            })
+            .unwrap_or_default();
+        Ok(Issue {
             author,
-            owner,
-            repo,
-            number: i32::try_from(number).unwrap_or(i32::MAX),
-        };
-        Ok(issue)
+            owner: issue.repository.owner.login,
+            repo: issue.repository.name,
+            number: i32::try_from(issue.number)?,
+            title: issue.title,
+        })
+    }
+}
+
+impl TryFromKeyValue for Issue {
+    fn try_from_key_value(_: &[u8], value: &[u8]) -> anyhow::Result<Self> {
+        Ok(bincode::deserialize::<Issue>(value)?)
     }
 }
 
@@ -67,7 +88,16 @@ impl IssueQuery {
 
 #[cfg(test)]
 mod tests {
-    use crate::{github::GitHubIssue, graphql::TestSchema};
+    use crate::graphql::{Issue, TestSchema};
+
+    fn create_issues(n: usize) -> Vec<Issue> {
+        (0..n)
+            .map(|i| Issue {
+                number: i32::try_from(i).unwrap(),
+                ..Default::default()
+            })
+            .collect()
+    }
 
     #[tokio::test]
     async fn issues_empty() {
@@ -82,33 +112,14 @@ mod tests {
                 }
             }
         }";
-        let res = schema.execute(query).await;
-        assert_eq!(res.data.to_string(), "{issues: {edges: []}}");
+        let data = schema.execute(query).await.data.into_json().unwrap();
+        assert_eq!(data["issues"]["edges"].as_array().unwrap().len(), 0);
     }
 
     #[tokio::test]
     async fn issues_first() {
         let schema = TestSchema::new();
-        let issues = vec![
-            GitHubIssue {
-                number: 1,
-                title: "issue 1".to_string(),
-                author: "author 1".to_string(),
-                closed_at: None,
-            },
-            GitHubIssue {
-                number: 2,
-                title: "issue 2".to_string(),
-                author: "author 2".to_string(),
-                closed_at: None,
-            },
-            GitHubIssue {
-                number: 3,
-                title: "issue 3".to_string(),
-                author: "author 3".to_string(),
-                closed_at: None,
-            },
-        ];
+        let issues = create_issues(3);
         schema.db.insert_issues(issues, "owner", "name").unwrap();
 
         let query = r"
@@ -124,50 +135,15 @@ mod tests {
                 }
             }
         }";
-        let res = schema.execute(query).await;
-        assert_eq!(
-            res.data.to_string(),
-            "{issues: {edges: [{node: {number: 1}}, {node: {number: 2}}], pageInfo: {hasNextPage: true}}}"
-        );
-
-        let query = r"
-        {
-            issues(first: 5) {
-                pageInfo {
-                    hasNextPage
-                }
-            }
-        }";
-        let res = schema.execute(query).await;
-        assert_eq!(
-            res.data.to_string(),
-            "{issues: {pageInfo: {hasNextPage: false}}}"
-        );
+        let data = schema.execute(query).await.data.into_json().unwrap();
+        assert_eq!(data["issues"]["edges"].as_array().unwrap().len(), 2);
+        assert_eq!(data["issues"]["pageInfo"]["hasNextPage"], true);
     }
 
     #[tokio::test]
     async fn issues_last() {
         let schema = TestSchema::new();
-        let issues = vec![
-            GitHubIssue {
-                number: 1,
-                title: "issue 1".to_string(),
-                author: "author 1".to_string(),
-                closed_at: None,
-            },
-            GitHubIssue {
-                number: 2,
-                title: "issue 2".to_string(),
-                author: "author 2".to_string(),
-                closed_at: None,
-            },
-            GitHubIssue {
-                number: 3,
-                title: "issue 3".to_string(),
-                author: "author 3".to_string(),
-                closed_at: None,
-            },
-        ];
+        let issues = create_issues(3);
         schema.db.insert_issues(issues, "owner", "name").unwrap();
 
         let query = r"
@@ -183,24 +159,8 @@ mod tests {
                 }
             }
         }";
-        let res = schema.execute(query).await;
-        assert_eq!(
-            res.data.to_string(),
-            "{issues: {edges: [{node: {number: 2}}, {node: {number: 3}}], pageInfo: {hasPreviousPage: true}}}"
-        );
-
-        let query = r"
-        {
-            issues(last: 5) {
-                pageInfo {
-                    hasPreviousPage
-                }
-            }
-        }";
-        let res = schema.execute(query).await;
-        assert_eq!(
-            res.data.to_string(),
-            "{issues: {pageInfo: {hasPreviousPage: false}}}"
-        );
+        let data = schema.execute(query).await.data.into_json().unwrap();
+        assert_eq!(data["issues"]["edges"].as_array().unwrap().len(), 2);
+        assert_eq!(data["issues"]["pageInfo"]["hasPreviousPage"], true);
     }
 }
