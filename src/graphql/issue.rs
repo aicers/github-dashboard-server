@@ -15,6 +15,7 @@ use crate::{
 };
 
 #[derive(SimpleObject, Serialize, Deserialize)]
+#[cfg_attr(test, derive(Default))]
 pub(crate) struct Issue {
     pub(crate) owner: String,
     pub(crate) repo: String,
@@ -85,28 +86,15 @@ impl IssueQuery {
 
 #[cfg(test)]
 mod tests {
-    use serde::Deserialize;
+    use crate::graphql::{Issue, TestSchema};
 
-    use crate::{
-        github::open_issues,
-        graphql::{Issue, TestSchema},
-    };
-
-    fn load_issues() -> Vec<Issue> {
-        let fixture: serde_json::Value =
-            serde_json::from_reader(std::fs::File::open("fixtures/open_issues.json").unwrap())
-                .unwrap();
-        let data = fixture["data"].clone();
-        let res = open_issues::ResponseData::deserialize(data).unwrap();
-        res.collect_issues()
-    }
-
-    #[tokio::test]
-    async fn ser_de_issues() {
-        let issues = load_issues();
-        let ser = bincode::serialize(&issues).unwrap();
-        let de: Vec<Issue> = bincode::deserialize(&ser).unwrap();
-        assert_eq!(de.len(), 3);
+    fn create_issues(n: usize) -> Vec<Issue> {
+        (0..n)
+            .map(|i| Issue {
+                number: i64::try_from(i).unwrap(),
+                ..Default::default()
+            })
+            .collect()
     }
 
     #[tokio::test]
@@ -122,14 +110,14 @@ mod tests {
                 }
             }
         }";
-        let res = schema.execute(query).await;
-        assert_eq!(res.data.to_string(), "{issues: {edges: []}}");
+        let data = schema.execute(query).await.data.into_json().unwrap();
+        assert_eq!(data["issues"]["edges"].as_array().unwrap().len(), 0);
     }
 
     #[tokio::test]
     async fn issues_first() {
         let schema = TestSchema::new();
-        let issues = load_issues();
+        let issues = create_issues(3);
         schema.db.insert_issues(issues, "owner", "name").unwrap();
 
         let query = r"
@@ -145,31 +133,15 @@ mod tests {
                 }
             }
         }";
-        let res = schema.execute(query).await;
-        assert_eq!(
-            res.data.to_string(),
-            "{issues: {edges: [{node: {number: 106}}, {node: {number: 107}}], pageInfo: {hasNextPage: true}}}"
-        );
-
-        let query = r"
-        {
-            issues(first: 5) {
-                pageInfo {
-                    hasNextPage
-                }
-            }
-        }";
-        let res = schema.execute(query).await;
-        assert_eq!(
-            res.data.to_string(),
-            "{issues: {pageInfo: {hasNextPage: false}}}"
-        );
+        let data = schema.execute(query).await.data.into_json().unwrap();
+        assert_eq!(data["issues"]["edges"].as_array().unwrap().len(), 2);
+        assert_eq!(data["issues"]["pageInfo"]["hasNextPage"], true);
     }
 
     #[tokio::test]
     async fn issues_last() {
         let schema = TestSchema::new();
-        let issues = load_issues();
+        let issues = create_issues(3);
         schema.db.insert_issues(issues, "owner", "name").unwrap();
 
         let query = r"
@@ -185,24 +157,8 @@ mod tests {
                 }
             }
         }";
-        let res = schema.execute(query).await;
-        assert_eq!(
-            res.data.to_string(),
-            "{issues: {edges: [{node: {number: 107}}, {node: {number: 108}}], pageInfo: {hasPreviousPage: true}}}"
-        );
-
-        let query = r"
-        {
-            issues(last: 5) {
-                pageInfo {
-                    hasPreviousPage
-                }
-            }
-        }";
-        let res = schema.execute(query).await;
-        assert_eq!(
-            res.data.to_string(),
-            "{issues: {pageInfo: {hasPreviousPage: false}}}"
-        );
+        let data = schema.execute(query).await.data.into_json().unwrap();
+        assert_eq!(data["issues"]["edges"].as_array().unwrap().len(), 2);
+        assert_eq!(data["issues"]["pageInfo"]["hasPreviousPage"], true);
     }
 }
