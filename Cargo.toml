@@ -2,6 +2,7 @@
 name = "github-dashboard-server"
 version = "0.1.0"
 edition = "2021"
+exclude = ["fixtures/*"]
 
 [dependencies]
 anyhow = "1"

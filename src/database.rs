@@ -6,7 +6,7 @@ use serde::Serialize;
 use sled::{Db, Tree};
 
 use crate::{
-    github::{GitHubIssue, GitHubPullRequests},
+    github::GitHubPullRequests,
     graphql::{Issue, PullRequest},
 };
 const ISSUE_TREE_NAME: &str = "issues";
@@ -58,19 +58,10 @@ impl Database {
         bail!("Failed to get db value");
     }
 
-    pub(crate) fn insert_issues(
-        &self,
-        resp: Vec<GitHubIssue>,
-        owner: &str,
-        name: &str,
-    ) -> Result<()> {
+    pub(crate) fn insert_issues(&self, resp: Vec<Issue>, owner: &str, name: &str) -> Result<()> {
         for item in resp {
-            let keystr: String = format!("{owner}/{name}#{}", item.number);
-            Database::insert(
-                &keystr,
-                (&item.title, &item.author, &item.closed_at),
-                &self.issue_tree,
-            )?;
+            let key: String = format!("{owner}/{name}#{}", item.number);
+            Database::insert(&key, item, &self.issue_tree)?;
         }
         Ok(())
     }
