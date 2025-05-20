@@ -27,10 +27,7 @@ fn callbacks(ssh: &str) -> Result<RemoteCallbacks> {
     let passphrase = std::env::var(ENV_SSH_PASSPHRASE).ok();
     callbacks.credentials(move |_url, username_from_url, _allowed_types| {
         Cred::ssh_key(
-            username_from_url.expect(
-            "This is safe because we explicitly set the base URL to 'git@github.com' at `init_repo`.
-            As long as this base URL doesn't change, `username_from_url` will always be 'git'.",
-            ),
+            username_from_url.unwrap_or("git"),
             None,
             &ssh_path,
             passphrase.as_deref(),
