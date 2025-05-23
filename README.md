@@ -80,3 +80,10 @@ The web server will use the address value specified in the configuration file.
 
 - `config_file`: The path to the TOML file containing server configuration
   details.
+
+## GitHub GraphQL API Testing
+
+The GitHub GraphQL API used in this project was last tested on 2025-05-19. It is
+advisable to regularly review
+[breaking changes](https://docs.github.com/en/graphql/overview/breaking-changes)
+in the GitHub GraphQL API.
