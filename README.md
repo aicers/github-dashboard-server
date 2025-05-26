@@ -4,8 +4,7 @@
 
 ## Usage
 
-Before running the app, create a TOML configuration file in the following
-format:
+Before running the app, create a TOML configuration file in the following format:
 
 ```toml
 [web]
@@ -34,8 +33,7 @@ db_path = "db_path"
 - `cert`: The TLS certificate path for the web server.
 - `owner`: The owner of the GitHub repository.
 - `name`: The name of the GitHub repository.
-- `token`: A Github fine-grained
-  [personal access token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-token).
+- `token`: A Github fine-grained [personal access token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-token).
   The token's lifetime should be less than one year for security purposes.
   Minimum required permissions are as follows:
   - Repository: Access to all repositories
@@ -60,16 +58,14 @@ To run the application without specifying the configuration file path, save the
 file to one of the following locations:
 
 - Linux: $HOME/.config/github-dashboard-server/config.toml
-- macOS: $HOME/Library/Application
-  Support/com.cluml.github-dashboard-server/config.toml
+- macOS: $HOME/Library/Application Support/com.cluml.github-dashboard-server/config.toml
 
 The web server will use the address value specified in the configuration file.
 
 ### Accessing the Web Interface
 
 - Open <https://localhost:8000> in your browser to run the app.
-- Visit <https://localhost:8000/graphql/playground> to access the GraphQL
-  playground.
+- Visit <https://localhost:8000/graphql/playground> to access the GraphQL playground.
 
 ## FLAGS
 
@@ -78,12 +74,10 @@ The web server will use the address value specified in the configuration file.
 
 ## OPTION
 
-- `config_file`: The path to the TOML file containing server configuration
-  details.
+- `config_file`: The path to the TOML file containing server configuration details.
 
 ## GitHub GraphQL API Testing
 
 The GitHub GraphQL API used in this project was last tested on 2025-05-19. It is
-advisable to regularly review
-[breaking changes](https://docs.github.com/en/graphql/overview/breaking-changes)
+advisable to regularly review [breaking changes](https://docs.github.com/en/graphql/overview/breaking-changes)
 in the GitHub GraphQL API.
