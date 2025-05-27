@@ -62,11 +62,11 @@ pub(super) async fn fetch_periodically(
     let mut itv = time::interval(period);
     loop {
         itv.tick().await;
-        let last_time = match db.select_db("last_time") {
+        let since = match db.select_db("since") {
             Ok(r) => r,
             Err(_) => INIT_TIME.to_string(),
         };
-        if let Err(e) = db.insert_db("last_time", format!("{:?}", Utc::now())) {
+        if let Err(e) = db.insert_db("since", format!("{:?}", Utc::now())) {
             error!("Insert DateTime Error: {}", e);
         }
 
@@ -74,8 +74,7 @@ pub(super) async fn fetch_periodically(
             let mut re_itv = time::interval(retry);
             loop {
                 re_itv.tick().await;
-                match send_github_issue_query(&repoinfo.owner, &repoinfo.name, &last_time, &token)
-                    .await
+                match send_github_issue_query(&repoinfo.owner, &repoinfo.name, &since, &token).await
                 {
                     Ok(resps) => {
                         for resp in resps {
@@ -121,7 +120,7 @@ pub(super) async fn fetch_periodically(
 async fn send_github_issue_query(
     owner: &str,
     name: &str,
-    last_time: &str,
+    since: &str,
     token: &str,
 ) -> Result<Vec<Vec<GitHubIssue>>> {
     let mut total_issue = Vec::new();
@@ -135,7 +134,7 @@ async fn send_github_issue_query(
             last: None,
             before: None,
             after: end_cur,
-            lasttime: last_time.to_string(),
+            since: Some(since.to_string()),
         };
         let resp_body: GraphQlResponse<issues::ResponseData> =
             send_query::<Issues>(token, var).await?.json().await?;
