@@ -11,7 +11,7 @@ use git2::{Cred, FetchOptions, RemoteCallbacks, Repository};
 use tokio::time;
 use tracing::{error, info};
 
-use crate::conf::RepoInfo;
+use crate::settings::Repository as RepoInfo;
 
 const FETCH_HEAD: &str = "FETCH_HEAD";
 const LOCAL_BASE_REPO: &str = "repos";

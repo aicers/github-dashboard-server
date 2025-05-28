@@ -19,6 +19,10 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   nor `last` is specified.
 - GraphQL API `issues` and `pullRequests` return an error if conflicting
   pagination arguments (e.g., `first` and `before`) are provided simultaneously.
+- Replaced file-based config loading with the `config` crate.
+- Config file must now be specified with `-c <CONFIG_PATH>`.
+- `--key` and `--cert` are now required as CLI options instead of being set in
+  the config file.
 
 ### Fixed
 
