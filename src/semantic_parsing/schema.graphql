@@ -1,0 +1,117 @@
+# Indicates that an Input Object is a OneOf Input Object (and thus requires
+#                         exactly one of its field be provided)
+directive @oneOf on INPUT_OBJECT
+
+# Implement the DateTime<Utc> scalar
+#
+# The input/output is a string in RFC3339 format.
+scalar DateTime
+
+type Issue {
+  owner: String!
+  repo: String!
+  number: Int!
+  title: String!
+  author: String!
+  state: IssueState!
+  createdAt: DateTime!
+}
+
+type IssueConnection {
+  # Information to aid in pagination.
+  pageInfo: PageInfo!
+
+  # A list of edges.
+  edges: [IssueEdge!]!
+
+  # A list of nodes.
+  nodes: [Issue!]!
+}
+
+# An edge in a connection.
+type IssueEdge {
+  # The item at the end of the edge
+  node: Issue!
+
+  # A cursor for use in pagination
+  cursor: String!
+}
+
+type IssueStat {
+  # The number of open issues.
+  openIssueCount: Int!
+}
+
+scalar IssueState
+
+# Information about pagination in a connection
+type PageInfo {
+  # When paginating backwards, are there more items?
+  hasPreviousPage: Boolean!
+
+  # When paginating forwards, are there more items?
+  hasNextPage: Boolean!
+
+  # When paginating backwards, the cursor to continue.
+  startCursor: String
+
+  # When paginating forwards, the cursor to continue.
+  endCursor: String
+}
+
+type PullRequest {
+  owner: String!
+  repo: String!
+  number: Int!
+  title: String!
+  assignees: [String!]!
+  reviewers: [String!]!
+}
+
+type PullRequestConnection {
+  # Information to aid in pagination.
+  pageInfo: PageInfo!
+
+  # A list of edges.
+  edges: [PullRequestEdge!]!
+
+  # A list of nodes.
+  nodes: [PullRequest!]!
+}
+
+# An edge in a connection.
+type PullRequestEdge {
+  # The item at the end of the edge
+  node: PullRequest!
+
+  # A cursor for use in pagination
+  cursor: String!
+}
+
+# A set of queries defined in the schema.
+#
+# This is exposed only for [`Schema`], and not used directly.
+type Query {
+  issues(after: String, before: String, first: Int, last: Int): IssueConnection!
+  pullRequests(
+    after: String
+    before: String
+    first: Int
+    last: Int
+  ): PullRequestConnection!
+  issueStat(filter: StatFilter!): IssueStat!
+}
+
+input StatFilter {
+  # The author of the issues. Optional.
+  author: String
+
+  # The repository name. Optional.
+  repo: String
+
+  # To filter created date. Optional.
+  begin: DateTime
+
+  # To filter created date. Optional.
+  end: DateTime
+}
