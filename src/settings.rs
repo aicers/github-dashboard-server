@@ -23,6 +23,10 @@ pub(crate) struct Args {
     /// Path to the key file.
     #[arg(long, value_name = "KEY_PATH")]
     pub(crate) key: PathBuf,
+
+    /// Query.
+    #[arg(long, value_name = "Prompt")]
+    pub(crate) prompt: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
