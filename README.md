@@ -4,46 +4,7 @@
 
 ## Usage
 
-Before running the app, create a TOML configuration file in the following format:
-
-```toml
-[web]
-address = "127.0.0.1:8000"
-
-[[repositories]]
-owner = "aicers"
-name = "github-dashboard-server"
-
-[[repositories]]
-owner = "aicers"
-name = "github-dashboard-client"
-
-[certification]
-token = "github_token_info"
-ssh = ".ssh/id_ed25519"
-
-[database]
-db_path = "github-dashboard"
-```
-
-- `address`: IP address and port the web server listens on. (Default:
-  127.0.0.1:8000)
-- `owner`: The owner of the GitHub repository.
-- `name`: The name of the GitHub repository.
-- `token`: A Github fine-grained [personal access token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-token).
-  The token's lifetime should be less than one year for security purposes.
-  Minimum required permissions are as follows:
-  - Repository: Access to all repositories
-  - Issues: Read-only access
-  - Pull Requests: Read-only access
-- `ssh`: The path to SSH private key for GitHub code checkout.
-  - To provide an SSH passphrase, set the `SSH_PASSPHRASE` environment variable.
-- `db_path`: Folder where the sled database files are stored. Created
-  automatically if it doesn’t exist. (Default: github-dashboard)
-
-### Running the App
-
-Run app with the prepared configuration file and following command.
+Run app with the prepared configuration file and following command:
 
 ```sh
 cargo run -- -c <CONFIG_PATH> \
@@ -64,10 +25,82 @@ cargo run -- -c <CONFIG_PATH> \
 - Open <https://localhost:8000> in your browser to run the app.
 - Visit <https://localhost:8000/graphql/playground> to access the GraphQL playground.
 
-## FLAGS
+### Flags
 
 - `-h`, `--help`: Displays help information.
 - `-V`, `--version`: Displays version information.
+
+## Configuration
+
+In the configuration file, you can specify the following options:
+
+### `[web]`
+
+<!-- markdownlint-disable MD013 -->
+
+| Field     | Description                                   | Required | Default        |
+| --------- | --------------------------------------------- | -------- | -------------- |
+| `address` | IP address and port the web server listens on | No       | 127.0.0.1:8000 |
+
+<!-- markdownlint-enable MD013-->
+
+### `[[repositories]]`
+
+| Field   | Description                        | Required | Default |
+| ------- | ---------------------------------- | -------- | ------- |
+| `owner` | The owner of the GitHub repository | Yes      | -       |
+| `name`  | The name of the GitHub repository  | Yes      | -       |
+
+### `[certification]`
+
+<!-- markdownlint-disable MD013 -->
+
+| Field   | Description                                          | Required | Default |
+| ------- | ---------------------------------------------------- | -------- | ------- |
+| `token` | A GitHub fine-grained personal access token          | Yes      | -       |
+| `ssh`   | The path to SSH private key for GitHub code checkout | Yes      | -       |
+
+<!-- markdownlint-enable MD013-->
+
+- `token`: The [personal access token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-token)'s
+  lifetime should be less than one year for security purposes. Minimum required
+  permissions are as follows:
+  - Repository: Access to all repositories
+  - Issues: Read-only access
+  - Pull Requests: Read-only access
+- `ssh`: To provide an SSH passphrase, set the `SSH_PASSPHRASE` environment variable.
+
+### `[database]`
+
+<!-- markdownlint-disable MD013 -->
+
+| Field     | Description                                     | Required | Default          |
+| --------- | ----------------------------------------------- | -------- | ---------------- |
+| `db_path` | Folder where the sled database files are stored | No       | github-dashboard |
+
+<!-- markdownlint-enable MD013-->
+
+## Configuration Example
+
+```toml
+[web]
+address = "127.0.0.1:8000"
+
+[[repositories]]
+owner = "aicers"
+name = "github-dashboard-server"
+
+[[repositories]]
+owner = "aicers"
+name = "github-dashboard-client"
+
+[certification]
+token = "github_token_info"
+ssh = ".ssh/id_ed25519"
+
+[database]
+db_path = "github-dashboard"
+```
 
 ## GitHub GraphQL API Testing
 
