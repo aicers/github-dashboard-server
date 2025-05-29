@@ -3,10 +3,12 @@ mod database;
 mod github;
 mod google;
 mod graphql;
+mod semantic_parsing;
 mod settings;
 mod web;
 
 use std::sync::Arc;
+use std::{fs, process::exit};
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -21,6 +23,8 @@ const ONE_DAY: u64 = ONE_HOUR * 24;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    tracing_subscriber::fmt::init();
+
     println!("AICE GitHub Dashboard Server");
     let args = Args::parse();
     let settings = Settings::from_file(&args.config)
@@ -35,7 +39,19 @@ async fn main() -> Result<()> {
         .await
         .context("Problem while checking for public Google key.")?;
 
-    tracing_subscriber::fmt::init();
+    let schema = graphql::schema(database.clone());
+
+    if let Some(prompt) = args.prompt {
+        // let sdl = schema.sdl();
+
+        // Contrived schema for test.
+        let sdl = fs::read_to_string("src/semantic_parsing/schema.graphql")?;
+        let query = semantic_parsing::invoke(&sdl, &prompt).await?;
+        println!("Generated GraphQL Query:\n{query}");
+        let response = schema.execute(query).await;
+        println!("Response: {response:?}");
+        exit(0);
+    }
 
     // Fetches issues and pull requests from GitHub every hour, and stores them
     // in the database.
@@ -44,7 +60,7 @@ async fn main() -> Result<()> {
         settings.certification.token,
         time::Duration::from_secs(ONE_HOUR),
         time::Duration::from_secs(FIVE_MIN),
-        database.clone(),
+        database,
     ));
 
     task::spawn(checkout::fetch_periodically(
@@ -52,8 +68,6 @@ async fn main() -> Result<()> {
         time::Duration::from_secs(ONE_DAY),
         settings.certification.ssh,
     ));
-
-    let schema = graphql::schema(database);
 
     web::serve(schema, settings.web.address, &args.key, &args.cert).await;
     Ok(())

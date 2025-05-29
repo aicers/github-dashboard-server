@@ -47,8 +47,8 @@ impl IssueQuery {
     async fn issues(
         &self,
         ctx: &Context<'_>,
-        after: Option<String>,
-        before: Option<String>,
+        #[graphql(desc = "Cursor text for pagination.")] after: Option<String>,
+        #[graphql(desc = "Cursor text for pagination.")] before: Option<String>,
         first: Option<i32>,
         last: Option<i32>,
     ) -> Result<Connection<String, Issue, EmptyFields, EmptyFields>> {
