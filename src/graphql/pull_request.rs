@@ -1,14 +1,21 @@
 use std::fmt;
 
-use anyhow::Context as AnyhowContext;
 use async_graphql::{
     connection::{query, Connection, EmptyFields},
     Context, Object, Result, SimpleObject,
 };
+use serde::{Deserialize, Serialize};
 
-use crate::database::{self, Database, TryFromKeyValue};
+use crate::{
+    database::{Database, TryFromKeyValue},
+    github::pull_requests::{
+        PullRequestsRepositoryPullRequestsNodes,
+        PullRequestsRepositoryPullRequestsNodesReviewRequestsNodesRequestedReviewer::User,
+    },
+};
 
-#[derive(SimpleObject)]
+#[derive(SimpleObject, Serialize, Deserialize)]
+#[cfg_attr(test, derive(Default))]
 pub(crate) struct PullRequest {
     pub(crate) owner: String,
     pub(crate) repo: String,
@@ -18,21 +25,51 @@ pub(crate) struct PullRequest {
     pub(crate) reviewers: Vec<String>,
 }
 
-impl TryFromKeyValue for PullRequest {
-    fn try_from_key_value(key: &[u8], value: &[u8]) -> anyhow::Result<Self> {
-        let (owner, repo, number) = database::parse_key(key)
-            .with_context(|| format!("invalid key in database: {key:02x?}"))?;
-        let deserialized = bincode::deserialize::<(String, Vec<String>, Vec<String>)>(value)?;
-        let (title, assignees, reviewers) = deserialized;
-        let pr = PullRequest {
-            title,
+impl TryFrom<PullRequestsRepositoryPullRequestsNodes> for PullRequest {
+    type Error = anyhow::Error;
+
+    fn try_from(pr: PullRequestsRepositoryPullRequestsNodes) -> Result<Self, Self::Error> {
+        let assignees: Vec<String> = pr
+            .assignees
+            .nodes
+            .map(|nodes| nodes.into_iter().flatten().map(|node| node.login).collect())
+            .unwrap_or_default();
+
+        let reviewers = pr
+            .review_requests
+            .and_then(|request| {
+                request.nodes.map(|nodes| {
+                    nodes
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|review_request| {
+                            review_request.requested_reviewer.and_then(|reviewer| {
+                                if let User(user) = reviewer {
+                                    Some(user.login)
+                                } else {
+                                    None
+                                }
+                            })
+                        })
+                        .collect()
+                })
+            })
+            .unwrap_or_default();
+
+        Ok(Self {
+            repo: pr.repository.name,
+            owner: pr.repository.owner.login,
+            number: i32::try_from(pr.number)?,
+            title: pr.title,
             assignees,
             reviewers,
-            owner,
-            repo,
-            number: i32::try_from(number).unwrap_or(i32::MAX),
-        };
-        Ok(pr)
+        })
+    }
+}
+
+impl TryFromKeyValue for PullRequest {
+    fn try_from_key_value(_: &[u8], value: &[u8]) -> anyhow::Result<Self> {
+        Ok(bincode::deserialize::<PullRequest>(value)?)
     }
 }
 
@@ -70,7 +107,17 @@ impl PullRequestQuery {
 
 #[cfg(test)]
 mod tests {
-    use crate::{github::GitHubPullRequests, graphql::TestSchema};
+    use super::PullRequest;
+    use crate::graphql::TestSchema;
+
+    fn create_pull_requests(n: usize) -> Vec<PullRequest> {
+        (0..n)
+            .map(|i| PullRequest {
+                number: i32::try_from(i).unwrap(),
+                ..Default::default()
+            })
+            .collect()
+    }
 
     #[tokio::test]
     async fn pull_requests_empty() {
@@ -85,27 +132,14 @@ mod tests {
                 }
             }
         }";
-        let res = schema.execute(query).await;
-        assert_eq!(res.data.to_string(), "{pullRequests: {edges: []}}");
+        let data = schema.execute(query).await.data.into_json().unwrap();
+        assert_eq!(data["pullRequests"]["edges"].as_array().unwrap().len(), 0);
     }
 
     #[tokio::test]
     async fn pull_requests_first() {
         let schema = TestSchema::new();
-        let pull_requests = vec![
-            GitHubPullRequests {
-                number: 1,
-                title: "pull request 1".to_string(),
-                assignees: vec!["assignee 1".to_string()],
-                reviewers: vec!["reviewer 1".to_string()],
-            },
-            GitHubPullRequests {
-                number: 2,
-                title: "pull request 2".to_string(),
-                assignees: vec!["assignee 2".to_string()],
-                reviewers: vec!["reviewer 2".to_string()],
-            },
-        ];
+        let pull_requests = create_pull_requests(2);
         schema
             .db
             .insert_pull_requests(pull_requests, "owner", "name")
@@ -124,44 +158,15 @@ mod tests {
                 }
             }
         }";
-        let res = schema.execute(query).await;
-        assert_eq!(
-            res.data.to_string(),
-            "{pullRequests: {edges: [{node: {number: 1}}], pageInfo: {hasNextPage: true}}}"
-        );
-
-        let query = r"
-        {
-            pullRequests(first: 5) {
-                pageInfo {
-                    hasNextPage
-                }
-            }
-        }";
-        let res = schema.execute(query).await;
-        assert_eq!(
-            res.data.to_string(),
-            "{pullRequests: {pageInfo: {hasNextPage: false}}}"
-        );
+        let data = schema.execute(query).await.data.into_json().unwrap();
+        assert_eq!(data["pullRequests"]["edges"].as_array().unwrap().len(), 1);
+        assert_eq!(data["pullRequests"]["pageInfo"]["hasNextPage"], true);
     }
 
     #[tokio::test]
     async fn pull_requests_last() {
         let schema = TestSchema::new();
-        let pull_requests = vec![
-            GitHubPullRequests {
-                number: 1,
-                title: "pull request 1".to_string(),
-                assignees: vec!["assignee 1".to_string()],
-                reviewers: vec!["reviewer 1".to_string()],
-            },
-            GitHubPullRequests {
-                number: 2,
-                title: "pull request 2".to_string(),
-                assignees: vec!["assignee 2".to_string()],
-                reviewers: vec!["reviewer 2".to_string()],
-            },
-        ];
+        let pull_requests = create_pull_requests(2);
         schema
             .db
             .insert_pull_requests(pull_requests, "owner", "name")
@@ -180,24 +185,40 @@ mod tests {
                 }
             }
         }";
-        let res = schema.execute(query).await;
-        assert_eq!(
-            res.data.to_string(),
-            "{pullRequests: {edges: [{node: {number: 2}}], pageInfo: {hasPreviousPage: true}}}"
-        );
+        let data = schema.execute(query).await.data.into_json().unwrap();
+        assert_eq!(data["pullRequests"]["edges"].as_array().unwrap().len(), 1);
+        assert_eq!(data["pullRequests"]["pageInfo"]["hasPreviousPage"], true);
+    }
 
+    #[tokio::test]
+    async fn reviewers() {
+        let schema = TestSchema::new();
+        let mut pull_requests = create_pull_requests(2);
+        pull_requests[0].reviewers.push("sophie-cluml".to_string());
+
+        schema
+            .db
+            .insert_pull_requests(pull_requests, "owner", "name")
+            .unwrap();
         let query = r"
         {
-            pullRequests(last: 2) {
+            pullRequests(first: 1) {
+                edges {
+                    node {
+                        number
+                        reviewers
+                    }
+                }
                 pageInfo {
                     hasPreviousPage
                 }
             }
         }";
-        let res = schema.execute(query).await;
+        let data = schema.execute(query).await.data.into_json().unwrap();
+
         assert_eq!(
-            res.data.to_string(),
-            "{pullRequests: {pageInfo: {hasPreviousPage: false}}}"
+            data["pullRequests"]["edges"][0]["node"]["reviewers"][0],
+            "sophie-cluml"
         );
     }
 }

@@ -28,6 +28,10 @@ query Issues(
         closedAt
         repository {
           name
+          owner {
+            __typename
+            login
+          }
         }
         author {
           __typename
