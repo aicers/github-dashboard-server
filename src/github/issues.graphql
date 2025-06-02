@@ -20,15 +20,14 @@ query Issues(
         endCursor
       }
       nodes {
+        id
         number
         title
+        body
         state
+        closedAt
         createdAt
         updatedAt
-        closedAt
-        repository {
-          name
-        }
         author {
           __typename
           ... on User {
@@ -36,9 +35,123 @@ query Issues(
           }
         }
         # TODO: #181
-        assignees(first: 10) {
+        assignees(last: 5) {
           nodes {
             login
+          }
+        }
+        # TODO: #181
+        labels(last: 5) {
+          nodes {
+            name
+          }
+        }
+        # TODO: #181
+        comments(last: 100) {
+          totalCount
+          nodes {
+            author {
+              __typename
+              ... on User {
+                login
+              }
+            }
+            body
+            createdAt
+            id
+            repository {
+              name
+            }
+            updatedAt
+            url
+          }
+        }
+        # TODO: #181
+        projectItems(last: 5) {
+          totalCount
+          nodes {
+            __typename
+            id
+            todoStatus: fieldValueByName(name: "Status") {
+              __typename
+              ... on ProjectV2ItemFieldSingleSelectValue {
+                name
+              }
+            }
+            todoPriority: fieldValueByName(name: "Priority") {
+              __typename
+              ... on ProjectV2ItemFieldSingleSelectValue {
+                name
+              }
+            }
+            todoSize: fieldValueByName(name: "Size") {
+              __typename
+              ... on ProjectV2ItemFieldSingleSelectValue {
+                name
+              }
+            }
+            todoInitiationOption: fieldValueByName(name: "Initiation Options") {
+              __typename
+              ... on ProjectV2ItemFieldSingleSelectValue {
+                name
+              }
+            }
+            todoPendingDays: fieldValueByName(name: "Pending days") {
+              __typename
+              ... on ProjectV2ItemFieldNumberValue {
+                number
+              }
+            }
+          }
+        }
+        # TODO: #181
+        subIssues(last: 20) {
+          totalCount
+          nodes {
+            id
+            number
+            title
+            state
+            closedAt
+            createdAt
+            updatedAt
+            author {
+              __typename
+              ... on User {
+                login
+              }
+            }
+            # TODO: #181
+            assignees(last: 5) {
+              nodes {
+                login
+              }
+            }
+          }
+        }
+        parent {
+          id
+          number
+          title
+        }
+        url
+        # TODO: #181
+        closedByPullRequestsReferences(last: 5) {
+          edges {
+            node {
+              number
+              state
+              closedAt
+              createdAt
+              updatedAt
+              author {
+                __typename
+                ... on User {
+                  login
+                }
+              }
+              url
+            }
           }
         }
       }
