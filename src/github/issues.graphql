@@ -20,19 +20,124 @@ query Issues(
         endCursor
       }
       nodes {
+        id
         number
         title
+        body
         state
+        closedAt
         createdAt
         updatedAt
-        closedAt
         repository {
           name
+          owner {
+            __typename
+            login
+          }
         }
         author {
           __typename
           ... on User {
             login
+          }
+        }
+        assignees(last: 5) {
+          nodes {
+            login
+          }
+        }
+        labels(last: 5) {
+          nodes {
+            name
+          }
+        }
+        comments(last: 100) {
+          totalCount
+          nodes {
+            author {
+              __typename
+              ... on User {
+                login
+              }
+            }
+            body
+            createdAt
+            id
+            repository {
+              name
+            }
+            updatedAt
+            url
+          }
+        }
+        projectItems(last: 5) {
+          totalCount
+          nodes {
+            id
+          }
+        }
+        projectV2(number: 4) {
+          id
+          title
+          items(last: 5) {
+            totalCount
+          }
+        }
+        projectsV2(last: 5) {
+          totalCount
+          nodes {
+            id
+            title
+            items(last: 5) {
+              totalCount
+            }
+          }
+        }
+        subIssues(last: 20) {
+          totalCount
+          nodes {
+            id
+            number
+            title
+            state
+            closedAt
+            createdAt
+            updatedAt
+            author {
+              __typename
+              ... on User {
+                login
+              }
+            }
+            assignees(last: 5) {
+              nodes {
+                login
+              }
+            }
+          }
+        }
+        parent {
+          id
+          number
+          title
+        }
+        url
+        closedByPullRequestsReferences(last: 5) {
+          edges {
+            node {
+              number
+              state
+              closedAt
+              createdAt
+              updatedAt
+              author {
+                __typename
+                ... on User {
+                  login
+                }
+              }
+              url
+            }
           }
         }
       }

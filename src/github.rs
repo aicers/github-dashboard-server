@@ -19,6 +19,8 @@ const APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PK
 const INIT_TIME: &str = "1992-06-05T00:00:00Z";
 
 type DateTime = String;
+#[allow(clippy::upper_case_acronyms)]
+type URI = String;
 
 #[derive(GraphQLQuery)]
 #[graphql(
