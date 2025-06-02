@@ -1,4 +1,4 @@
-mod issue;
+pub(crate) mod issue;
 mod pull_request;
 
 use std::fmt::Display;
