@@ -11,6 +11,7 @@ use async_graphql::{
 };
 use base64::{engine::general_purpose, Engine as _};
 use jiff::Timestamp;
+use serde::{Deserialize, Serialize};
 
 use crate::database::Database;
 
@@ -30,8 +31,8 @@ pub(crate) struct Query(
 
 pub(crate) type Schema = async_graphql::Schema<Query, EmptyMutation, EmptySubscription>;
 
-#[derive(Debug)]
-pub(crate) struct DateTimeUtc(Timestamp);
+#[derive(Debug, Default, Deserialize, Serialize)]
+pub(crate) struct DateTimeUtc(pub(crate) Timestamp);
 
 #[Scalar]
 impl ScalarType for DateTimeUtc {
