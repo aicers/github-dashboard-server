@@ -4,12 +4,12 @@ use anyhow::{bail, Context, Result};
 use graphql_client::{GraphQLQuery, QueryBody, Response as GraphQlResponse};
 use jiff::Timestamp;
 use reqwest::{Client, RequestBuilder, Response};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tokio::time;
 use tracing::error;
 
 use crate::{database::Database, github::{
-    issues::IssuesRepositoryIssuesNodesAuthor::User as userName,
+    issues::{IssueState, IssuesRepositoryIssuesNodesAuthor::User as userName},
     pull_requests::PullRequestsRepositoryPullRequestsNodesReviewRequestsNodesRequestedReviewer::User,
 }, settings::Repository as RepoInfo};
 
@@ -18,15 +18,15 @@ const GITHUB_URL: &str = "https://api.github.com/graphql";
 const APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
 const INIT_TIME: &str = "1992-06-05T00:00:00Z";
 
-type DateTime = String;
+type DateTime = Timestamp;
 
 #[derive(GraphQLQuery)]
 #[graphql(
     schema_path = "src/github/schema.graphql",
     query_path = "src/github/issues.graphql",
-    response_derives = "Debug"
+    response_derives = "Debug, Clone"
 )]
-struct Issues;
+pub(crate) struct Issues;
 
 #[derive(GraphQLQuery)]
 #[graphql(
@@ -35,12 +35,22 @@ struct Issues;
 )]
 struct PullRequests;
 
-#[derive(Debug)]
+#[allow(clippy::derivable_impls)]
+impl Default for IssueState {
+    fn default() -> Self {
+        IssueState::OPEN
+    }
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub(super) struct GitHubIssue {
     pub(super) number: i64,
     pub(super) title: String,
     pub(super) author: String,
     pub(super) closed_at: Option<DateTime>,
+    pub(super) created_at: DateTime,
+    pub(super) state: IssueState,
+    pub(super) assignees: Vec<String>,
 }
 
 #[derive(Debug)]
@@ -133,7 +143,7 @@ async fn send_github_issue_query(
             last: None,
             before: None,
             after: end_cur,
-            since: Some(since.to_string()),
+            since: Some(since.parse::<DateTime>()?),
         };
         let resp_body: GraphQlResponse<issues::ResponseData> =
             send_query::<Issues>(token, var).await?.json().await?;
@@ -147,11 +157,18 @@ async fn send_github_issue_query(
                         if let userName(on_user) = author_ref {
                             author.clone_from(&on_user.login.clone());
                         }
+                        let assignees =
+                            issue.assignees.nodes.as_ref().map_or(Vec::new(), |nodes| {
+                                nodes.iter().flatten().map(|a| a.login.clone()).collect()
+                            });
                         issues.push(GitHubIssue {
                             number: issue.number,
                             title: issue.title.to_string(),
                             author,
-                            closed_at: issue.closed_at.clone(),
+                            closed_at: issue.closed_at,
+                            created_at: issue.created_at,
+                            state: issue.state.clone(),
+                            assignees,
                         });
                     }
                     if !repository.issues.page_info.has_next_page {

@@ -7,7 +7,7 @@ use sled::{Db, Tree};
 
 use crate::{
     github::{GitHubIssue, GitHubPullRequests},
-    graphql::{Issue, PullRequest},
+    graphql::{issue::Issue, pull_request::PullRequest},
 };
 const ISSUE_TREE_NAME: &str = "issues";
 const PULL_REQUEST_TREE_NAME: &str = "pull_requests";
@@ -66,11 +66,7 @@ impl Database {
     ) -> Result<()> {
         for item in resp {
             let keystr: String = format!("{owner}/{name}#{}", item.number);
-            Database::insert(
-                &keystr,
-                (&item.title, &item.author, &item.closed_at),
-                &self.issue_tree,
-            )?;
+            Database::insert(&keystr, item, &self.issue_tree)?;
         }
         Ok(())
     }

@@ -35,6 +35,12 @@ query Issues(
             login
           }
         }
+        # TODO: #181
+        assignees(first: 10) {
+          nodes {
+            login
+          }
+        }
       }
     }
   }

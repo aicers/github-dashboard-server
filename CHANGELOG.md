@@ -11,6 +11,10 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Tracing with a filter set by `RUST_LOG` environment variable.
 - Added support for passing the SSH passphrase through the `SSH_PASSPHRASE`
   environment variable.
+- Added new GraphQL API: `issueStat` query. Users can filter issues by
+  `assignee`, `author`, `repo`(repository name), `begin` and `end` (creation
+  date range). The query returns the `openIssueCount` field, indicating the
+  number of open issues.
 
 ### Changed
 
