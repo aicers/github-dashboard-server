@@ -1,3 +1,4 @@
+mod discussion;
 pub(crate) mod issue;
 pub(crate) mod issue_stat;
 pub(crate) mod pull_request;
@@ -12,6 +13,7 @@ use async_graphql::{
 use base64::{engine::general_purpose, Engine as _};
 use jiff::Timestamp;
 
+pub(crate) use self::discussion::Discussion;
 use crate::database::Database;
 
 /// The default page size for connections when neither `first` nor `last` is
@@ -26,6 +28,7 @@ pub(crate) struct Query(
     issue::IssueQuery,
     pull_request::PullRequestQuery,
     issue_stat::IssueStatQuery,
+    discussion::DiscussionQuery,
 );
 
 pub(crate) type Schema = async_graphql::Schema<Query, EmptyMutation, EmptySubscription>;
