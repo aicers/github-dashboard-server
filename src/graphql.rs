@@ -1,3 +1,4 @@
+mod discussion;
 mod issue;
 mod pull_request;
 
@@ -9,6 +10,7 @@ use async_graphql::{
 };
 use base64::{engine::general_purpose, Engine as _};
 
+pub(crate) use self::discussion::Discussion;
 pub(crate) use self::issue::Issue;
 pub(crate) use self::pull_request::PullRequest;
 use crate::database::Database;
@@ -21,7 +23,11 @@ const DEFAULT_PAGE_SIZE: usize = 100;
 ///
 /// This is exposed only for [`Schema`], and not used directly.
 #[derive(Default, MergedObject)]
-pub(crate) struct Query(issue::IssueQuery, pull_request::PullRequestQuery);
+pub(crate) struct Query(
+    issue::IssueQuery,
+    pull_request::PullRequestQuery,
+    discussion::DiscussionQuery,
+);
 
 pub(crate) type Schema = async_graphql::Schema<Query, EmptyMutation, EmptySubscription>;
 

@@ -8,9 +8,9 @@ use serde::Serialize;
 use tokio::time;
 use tracing::error;
 
-use crate::{database::Database, github::{
+use crate::{database::{ Database, DiscussionDbSchema}, github::{
     issues::IssuesRepositoryIssuesNodesAuthor::User as userName,
-    pull_requests::PullRequestsRepositoryPullRequestsNodesReviewRequestsNodesRequestedReviewer::User,
+    pull_requests::PullRequestsRepositoryPullRequestsNodesReviewRequestsNodesRequestedReviewer::User
 }, settings::Repository as RepoInfo};
 
 const GITHUB_FETCH_SIZE: i64 = 10;
@@ -34,6 +34,16 @@ struct Issues;
     query_path = "src/github/pull_requests.graphql"
 )]
 struct PullRequests;
+
+#[allow(clippy::upper_case_acronyms)]
+type URI = String;
+
+#[derive(GraphQLQuery)]
+#[graphql(
+    schema_path = "src/github/schema.graphql",
+    query_path = "src/github/discussions.graphql"
+)]
+pub(crate) struct Discussions;
 
 #[derive(Debug)]
 pub(super) struct GitHubIssue {
@@ -108,6 +118,27 @@ pub(super) async fn fetch_periodically(
                     }
                     Err(error) => {
                         error!("Problem while sending github pr query. Query retransmission is done after 5 minutes. {}", error);
+                    }
+                }
+                itv.reset();
+            }
+
+            let mut re_itv = time::interval(retry);
+            loop {
+                re_itv.tick().await;
+                match send_github_discussion_query(&repoinfo.owner, &repoinfo.name, &token).await {
+                    Ok(resps) => {
+                        for resp in resps {
+                            if let Err(error) =
+                                db.insert_discussions(resp, &repoinfo.owner, &repoinfo.name)
+                            {
+                                error!("Problem while insert Sled Database. {}", error);
+                            }
+                        }
+                        break;
+                    }
+                    Err(error) => {
+                        error!("Problem while sending github discussion query. Query retransmission is done after 5 minutes. {}", error);
                     }
                 }
                 itv.reset();
@@ -233,6 +264,52 @@ async fn send_github_pr_query(
         bail!("Failed to parse response data");
     }
     Ok(total_prs)
+}
+
+async fn send_github_discussion_query(
+    owner: &str,
+    name: &str,
+    token: &str,
+) -> Result<Vec<Vec<DiscussionDbSchema>>> {
+    use crate::database::discussion::DiscussionDbSchema;
+
+    let mut total_discussions = Vec::new();
+    let mut end_cur: Option<String> = None;
+    loop {
+        let var = discussions::Variables {
+            owner: owner.to_string(),
+            name: name.to_string(),
+            first: Some(GITHUB_FETCH_SIZE),
+            last: None,
+            before: None,
+            after: end_cur,
+        };
+
+        let resp_body: GraphQlResponse<discussions::ResponseData> =
+            send_query::<Discussions>(token, var).await?.json().await?;
+        if let Some(data) = resp_body.data {
+            if let Some(repository) = data.repository {
+                if let Some(nodes) = repository.discussions.nodes {
+                    let discussions = nodes
+                        .into_iter()
+                        .flatten()
+                        .map(DiscussionDbSchema::from)
+                        .collect();
+
+                    if !repository.discussions.page_info.has_next_page {
+                        total_discussions.push(discussions);
+                        break;
+                    }
+                    end_cur = repository.discussions.page_info.end_cursor;
+                    continue;
+                }
+                end_cur = repository.discussions.page_info.end_cursor;
+                continue;
+            }
+        }
+        bail!("Failed to parse response data");
+    }
+    Ok(total_discussions)
 }
 
 fn request<V>(request_body: &QueryBody<V>, token: &str) -> Result<RequestBuilder>

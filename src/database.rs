@@ -5,18 +5,25 @@ use regex::Regex;
 use serde::Serialize;
 use sled::{Db, Tree};
 
+pub mod discussion;
+
+pub(crate) use discussion::DiscussionDbSchema;
+
 use crate::{
     github::{GitHubIssue, GitHubPullRequests},
     graphql::{Issue, PullRequest},
 };
+
 const ISSUE_TREE_NAME: &str = "issues";
 const PULL_REQUEST_TREE_NAME: &str = "pull_requests";
+const DISCUSSION_TREE_NAME: &str = "discussions";
 
 #[derive(Clone)]
 pub(crate) struct Database {
     db: Db,
     issue_tree: Tree,
     pull_request_tree: Tree,
+    discussion_tree: Tree,
 }
 
 impl Database {
@@ -24,19 +31,21 @@ impl Database {
         Ok(sled::open(path)?)
     }
 
-    fn connect_trees(db: &Db) -> Result<(Tree, Tree)> {
+    fn connect_trees(db: &Db) -> Result<(Tree, Tree, Tree)> {
         let issue_tree = db.open_tree(ISSUE_TREE_NAME)?;
         let pull_request_tree = db.open_tree(PULL_REQUEST_TREE_NAME)?;
-        Ok((issue_tree, pull_request_tree))
+        let discussion_tree = db.open_tree(DISCUSSION_TREE_NAME)?;
+        Ok((issue_tree, pull_request_tree, discussion_tree))
     }
 
     pub(crate) fn connect(db_path: &Path) -> Result<Database> {
         let db = Database::connect_db(db_path)?;
-        let (issue_tree, pull_request_tree) = Database::connect_trees(&db)?;
+        let (issue_tree, pull_request_tree, discussion_tree) = Database::connect_trees(&db)?;
         Ok(Database {
             db,
             issue_tree,
             pull_request_tree,
+            discussion_tree,
         })
     }
 

@@ -1,0 +1,130 @@
+query Discussions(
+  $owner: String!
+  $name: String!
+  $first: Int
+  $last: Int
+  $before: String
+  $after: String
+) {
+  repository(owner: $owner, name: $name) {
+    discussions(first: $first, last: $last, before: $before, after: $after) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      nodes {
+        answer {
+          body
+          createdAt
+          updatedAt
+          url
+          replies(last: 10) {
+            totalCount
+            nodes {
+              body
+              createdAt
+              updatedAt
+              isAnswer
+              author {
+                __typename
+                ... on User {
+                  login
+                }
+              }
+            }
+          }
+          author {
+            __typename
+            ... on User {
+              login
+            }
+          }
+        }
+        answerChosenAt
+        answerChosenBy {
+          __typename
+          ... on User {
+            login
+          }
+        }
+        author {
+          __typename
+          ... on User {
+            login
+          }
+        }
+        body
+        category {
+          name
+        }
+        closed
+        closedAt
+        comments(last: 100) {
+          totalCount
+          nodes {
+            author {
+              __typename
+              ... on User {
+                login
+              }
+            }
+            body
+            createdAt
+            deletedAt
+            isAnswer
+            isMinimized
+            lastEditedAt
+            publishedAt
+            reactions(last: 10) {
+              totalCount
+              nodes {
+                content
+                createdAt
+              }
+            }
+            replies(last: 10) {
+              totalCount
+              nodes {
+                body
+                createdAt
+                updatedAt
+                isAnswer
+                author {
+                  __typename
+                  ... on User {
+                    login
+                  }
+                }
+              }
+            }
+            updatedAt
+            upvoteCount
+            url
+          }
+        }
+        createdAt
+        isAnswered
+        labels(last: 10) {
+          totalCount
+          nodes {
+            name
+            color
+          }
+        }
+        lastEditedAt
+        number
+        reactions(last: 10) {
+          totalCount
+          nodes {
+            content
+            createdAt
+          }
+        }
+        title
+        updatedAt
+        upvoteCount
+        url
+      }
+    }
+  }
+}
