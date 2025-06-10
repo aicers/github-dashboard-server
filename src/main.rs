@@ -6,7 +6,6 @@ mod graphql;
 mod settings;
 mod web;
 
-use std::process::exit;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
@@ -24,16 +23,10 @@ const ONE_DAY: u64 = ONE_HOUR * 24;
 async fn main() -> Result<()> {
     println!("AICE GitHub Dashboard Server");
     let args = Args::parse();
-    let settings = match Settings::from_file(&args.config) {
-        Ok(ret) => ret,
-        Err(error) => {
-            eprintln!("Problem while loading config. {error}");
-            exit(1);
-        }
-    };
+    let settings = Settings::from_file(&args.config)
+        .context("Failed to parse config file, Please check file contents")?;
 
     let repositories = Arc::new(settings.repositories);
-    let socket_addr = settings.web.address;
 
     let database = Database::connect(&settings.database.db_path)
         .context("Problem while Connect Sled Database.")?;
@@ -62,6 +55,6 @@ async fn main() -> Result<()> {
 
     let schema = graphql::schema(database);
 
-    web::serve(schema, socket_addr, &args.key, &args.cert).await;
+    web::serve(schema, settings.web.address, &args.key, &args.cert).await;
     Ok(())
 }
