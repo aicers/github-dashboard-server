@@ -1,17 +1,19 @@
-use std::{sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use anyhow::{bail, Context, Result};
 use chrono::Utc;
 use graphql_client::{GraphQLQuery, QueryBody, Response as GraphQlResponse};
+use langchain_rust::{schemas::Document, vectorstore::VecStoreOptions};
 use reqwest::{Client, RequestBuilder, Response};
 use serde::Serialize;
-use tokio::time;
-use tracing::error;
+use serde_json::{json, to_string};
+use tokio::{sync::Mutex, time};
+use tracing::{error, info};
 
 use crate::{database::{ Database, DiscussionDbSchema}, github::{
     issues::IssuesRepositoryIssuesNodesAuthor::User as userName,
-    pull_requests::PullRequestsRepositoryPullRequestsNodesReviewRequestsNodesRequestedReviewer::User
-}, settings::Repository as RepoInfo};
+    pull_requests::PullRequestsRepositoryPullRequestsNodesReviewRequestsNodesRequestedReviewer::User,
+}, rag_sample::RagOllamaSystem, settings::Repository as RepoInfo};
 
 const GITHUB_FETCH_SIZE: i64 = 10;
 const GITHUB_URL: &str = "https://api.github.com/graphql";
@@ -20,7 +22,7 @@ const INIT_TIME: &str = "1992-06-05T00:00:00Z";
 
 type DateTime = String;
 
-#[derive(GraphQLQuery)]
+#[derive(GraphQLQuery, Serialize)]
 #[graphql(
     schema_path = "src/github/schema.graphql",
     query_path = "src/github/issues.graphql",
@@ -28,7 +30,7 @@ type DateTime = String;
 )]
 struct Issues;
 
-#[derive(GraphQLQuery)]
+#[derive(GraphQLQuery, Serialize)]
 #[graphql(
     schema_path = "src/github/schema.graphql",
     query_path = "src/github/pull_requests.graphql"
@@ -45,7 +47,12 @@ type URI = String;
 )]
 pub(crate) struct Discussions;
 
-#[derive(Debug)]
+pub trait GithubData {
+    fn get_number(&self) -> i64;
+    fn get_author(&self) -> String;
+}
+
+#[derive(Debug, Serialize)]
 pub(super) struct GitHubIssue {
     pub(super) number: i64,
     pub(super) title: String,
@@ -53,7 +60,17 @@ pub(super) struct GitHubIssue {
     pub(super) closed_at: Option<DateTime>,
 }
 
-#[derive(Debug)]
+impl GithubData for GitHubIssue {
+    fn get_number(&self) -> i64 {
+        self.number
+    }
+
+    fn get_author(&self) -> String {
+        self.author.clone()
+    }
+}
+
+#[derive(Debug, Serialize)]
 pub(super) struct GitHubPullRequests {
     pub(super) number: i64,
     pub(super) title: String,
@@ -61,12 +78,24 @@ pub(super) struct GitHubPullRequests {
     pub(super) reviewers: Vec<String>,
 }
 
+impl GithubData for GitHubPullRequests {
+    fn get_number(&self) -> i64 {
+        self.number
+    }
+
+    fn get_author(&self) -> String {
+        String::default()
+    }
+}
+
+#[allow(clippy::too_many_lines)]
 pub(super) async fn fetch_periodically(
     repositories: Arc<Vec<RepoInfo>>,
     token: String,
     period: Duration,
     retry: Duration,
     db: Database,
+    rag: Arc<Mutex<RagOllamaSystem>>,
 ) {
     let mut itv = time::interval(period);
     loop {
@@ -87,12 +116,24 @@ pub(super) async fn fetch_periodically(
                 {
                     Ok(resps) => {
                         for resp in resps {
+                            add_documents_to_rag(
+                                &rag,
+                                &repoinfo.owner,
+                                &repoinfo.name,
+                                &resp,
+                                "Issues",
+                            )
+                            .await;
+
                             if let Err(error) =
                                 db.insert_issues(resp, &repoinfo.owner, &repoinfo.name)
                             {
                                 error!("Problem while insert Sled Database. {}", error);
+                            } else {
+                                info!("Success Appending issues");
                             }
                         }
+
                         break;
                     }
                     Err(error) => {
@@ -108,10 +149,20 @@ pub(super) async fn fetch_periodically(
                 match send_github_pr_query(&repoinfo.owner, &repoinfo.name, &token).await {
                     Ok(resps) => {
                         for resp in resps {
+                            add_documents_to_rag(
+                                &rag,
+                                &repoinfo.owner,
+                                &repoinfo.name,
+                                &resp,
+                                "Pull Requests",
+                            )
+                            .await;
                             if let Err(error) =
                                 db.insert_pull_requests(resp, &repoinfo.owner, &repoinfo.name)
                             {
                                 error!("Problem while insert Sled Database. {}", error);
+                            } else {
+                                info!("Success Appending Pull Requests");
                             }
                         }
                         break;
@@ -129,10 +180,20 @@ pub(super) async fn fetch_periodically(
                 match send_github_discussion_query(&repoinfo.owner, &repoinfo.name, &token).await {
                     Ok(resps) => {
                         for resp in resps {
+                            add_documents_to_rag(
+                                &rag,
+                                &repoinfo.owner,
+                                &repoinfo.name,
+                                &resp,
+                                "Discussions",
+                            )
+                            .await;
                             if let Err(error) =
                                 db.insert_discussions(resp, &repoinfo.owner, &repoinfo.name)
                             {
                                 error!("Problem while insert Sled Database. {}", error);
+                            } else {
+                                info!("Success Appending discussions");
                             }
                         }
                         break;
@@ -144,7 +205,45 @@ pub(super) async fn fetch_periodically(
                 itv.reset();
             }
         }
+        // {
+        //     let mut rag_guard = rag.lock().await;
+        //     rag_guard.set_chain();
+        // }
     }
+}
+
+async fn add_documents_to_rag<T>(
+    rag: &Arc<Mutex<RagOllamaSystem>>,
+    owner: &String,
+    name: &String,
+    resp: &[T],
+    doc_type: &str,
+) where
+    T: Serialize + GithubData,
+{
+    let mut rag_guard = rag.lock().await;
+    let docs = resp
+        .iter()
+        .map(|item| {
+            Document::new(to_string(item).unwrap()).with_metadata({
+                let mut metadata = HashMap::new();
+                metadata.insert("type".to_string(), json!(doc_type));
+                metadata.insert("repo".to_string(), json!(format!("{}/{}", &owner, &name)));
+                metadata.insert("number".to_string(), json!(item.get_number()));
+                metadata.insert("author".to_string(), json!(item.get_author()));
+                metadata
+            })
+        })
+        .collect::<Vec<Document>>();
+    let ids: Vec<String> = resp
+        .iter()
+        .map(|item| format!("{}/{}/{}", &owner, &name, item.get_number()))
+        .collect();
+    rag_guard
+        .add_documents_with_ids(&docs, &ids, &VecStoreOptions::default())
+        .await;
+
+    info!("[RAG] Success Appending {} {}", docs.len(), doc_type);
 }
 
 async fn send_github_issue_query(

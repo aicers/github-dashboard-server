@@ -3,6 +3,8 @@ mod database;
 mod github;
 mod google;
 mod graphql;
+mod rag_evaluation;
+mod rag_sample;
 mod settings;
 mod web;
 
@@ -13,8 +15,9 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use database::Database;
 use google::check_key;
+use rag_sample::RagOllamaSystem;
 use settings::{Args, Settings};
-use tokio::{task, time};
+use tokio::{sync::Mutex, task, time};
 
 const FIVE_MIN: u64 = 60 * 5;
 const ONE_HOUR: u64 = 60 * 60;
@@ -44,6 +47,9 @@ async fn main() -> Result<()> {
 
     tracing_subscriber::fmt::init();
 
+    let rag = RagOllamaSystem::new("nomic-embed-text".to_string(), "qwen3:8b".to_string());
+    let rag = Arc::new(Mutex::new(rag));
+
     // Fetches issues and pull requests from GitHub every hour, and stores them
     // in the database.
     task::spawn(github::fetch_periodically(
@@ -52,15 +58,14 @@ async fn main() -> Result<()> {
         time::Duration::from_secs(ONE_HOUR),
         time::Duration::from_secs(FIVE_MIN),
         database.clone(),
+        Arc::clone(&rag),
     ));
-
     task::spawn(checkout::fetch_periodically(
         Arc::clone(&repositories),
         time::Duration::from_secs(ONE_DAY),
         settings.certification.ssh,
     ));
-
-    let schema = graphql::schema(database);
+    let schema = graphql::schema(database, Arc::clone(&rag));
 
     web::serve(schema, socket_addr, &args.key, &args.cert).await;
     Ok(())

@@ -1,0 +1,202 @@
+[
+    {
+        "question": "How many issues has user danbi2990 opened?",
+        "label": "quantitative"
+    },
+    {
+        "question": "What was the reason behind the latest PR rejection?",
+        "label": "qualitative"
+    },
+    {
+        "question": "How many pull requests were merged last month?",
+        "label": "quantitative"
+    },
+    {
+        "question": "What features were discussed in the roadmap thread?",
+        "label": "qualitative"
+    },
+    {
+        "question": "Which discussion had the highest number of comments?",
+        "label": "quantitative"
+    },
+    {
+        "question": "What is the tone of the feedback in issue #123?",
+        "label": "qualitative"
+    },
+    {
+        "question": "How many contributors participated in PR #456?",
+        "label": "quantitative"
+    },
+    {
+        "question": "Summarize the concerns raised in discussion #789.",
+        "label": "qualitative"
+    },
+    {
+        "question": "How many issues were labeled as bugs in April?",
+        "label": "quantitative"
+    },
+    {
+        "question": "What is the community sentiment towards the latest release?",
+        "label": "qualitative"
+    },
+    {
+        "question": "How many comments does PR #101 have?",
+        "label": "quantitative"
+    },
+    {
+        "question": "What suggestions were made regarding the UI redesign?",
+        "label": "qualitative"
+    },
+    {
+        "question": "List the number of open issues per repository.",
+        "label": "quantitative"
+    },
+    {
+        "question": "Describe the argument made by the author in discussion #321.",
+        "label": "qualitative"
+    },
+    {
+        "question": "How many issues were closed as duplicates?",
+        "label": "quantitative"
+    },
+    {
+        "question": "What reasoning was provided for closing issue #404?",
+        "label": "qualitative"
+    },
+    {
+        "question": "How many users commented on discussion #112?",
+        "label": "quantitative"
+    },
+    {
+        "question": "Explain the controversy discussed in PR #900.",
+        "label": "qualitative"
+    },
+    {
+        "question": "What is the average time to close an issue in this repo?",
+        "label": "quantitative"
+    },
+    {
+        "question": "What are the main pain points users mentioned in feedback?",
+        "label": "qualitative"
+    },
+    {
+        "question": "How many discussions did user123 start this year?",
+        "label": "quantitative"
+    },
+    {
+        "question": "What are the arguments made against merging PR #100?",
+        "label": "qualitative"
+    },
+    {
+        "question": "How many PRs have the 'performance' label?",
+        "label": "quantitative"
+    },
+    {
+        "question": "What are the main criticisms in issue #888?",
+        "label": "qualitative"
+    },
+    {
+        "question": "Which month had the most issues reported?",
+        "label": "quantitative"
+    },
+    {
+        "question": "How did the maintainers respond to the feature request?",
+        "label": "qualitative"
+    },
+    {
+        "question": "What’s the ratio of open to closed issues?",
+        "label": "quantitative"
+    },
+    {
+        "question": "Summarize the final decision in the 'Deprecate X' discussion.",
+        "label": "qualitative"
+    },
+    {
+        "question": "How many lines of code were added in PR #777?",
+        "label": "quantitative"
+    },
+    {
+        "question": "What concern did the community raise about version 2.0?",
+        "label": "qualitative"
+    },
+    {
+        "question": "Which PR had the longest review time?",
+        "label": "quantitative"
+    },
+    {
+        "question": "What alternatives were suggested instead of using Redis?",
+        "label": "qualitative"
+    },
+    {
+        "question": "How many people reacted with 👍 on issue #234?",
+        "label": "quantitative"
+    },
+    {
+        "question": "What is the proposed solution in PR #135?",
+        "label": "qualitative"
+    },
+    {
+        "question": "List the number of open discussions per category.",
+        "label": "quantitative"
+    },
+    {
+        "question": "Explain the reasoning behind refactoring the login system.",
+        "label": "qualitative"
+    },
+    {
+        "question": "How many issues were opened by bots?",
+        "label": "quantitative"
+    },
+    {
+        "question": "What sentiment is expressed in the feedback on the release post?",
+        "label": "qualitative"
+    },
+    {
+        "question": "What’s the average number of comments per issue?",
+        "label": "quantitative"
+    },
+    {
+        "question": "What usability concerns were raised in the accessibility thread?",
+        "label": "qualitative"
+    },
+    {
+        "question": "How many contributors submitted a PR last quarter?",
+        "label": "quantitative"
+    },
+    {
+        "question": "What potential risks were discussed in PR #921?",
+        "label": "qualitative"
+    },
+    {
+        "question": "Which user submitted the most PRs in 2024?",
+        "label": "quantitative"
+    },
+    {
+        "question": "What was the consensus about removing support for feature X?",
+        "label": "qualitative"
+    },
+    {
+        "question": "How many issues remain unresolved for milestone v1.1?",
+        "label": "quantitative"
+    },
+    {
+        "question": "What reasons were provided for delaying the release?",
+        "label": "qualitative"
+    },
+    {
+        "question": "How many discussions were closed without a reply?",
+        "label": "quantitative"
+    },
+    {
+        "question": "What are the community’s expectations from the new UI update?",
+        "label": "qualitative"
+    },
+    {
+        "question": "What’s the median time to merge a PR?",
+        "label": "quantitative"
+    },
+    {
+        "question": "What key concerns were raised in the mobile UX thread?",
+        "label": "qualitative"
+    }
+]

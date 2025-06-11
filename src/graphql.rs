@@ -1,19 +1,21 @@
 mod discussion;
 mod issue;
 mod pull_request;
+mod rag;
 
-use std::fmt::Display;
+use std::{fmt::Display, sync::Arc};
 
 use async_graphql::{
     types::connection::{Connection, Edge, EmptyFields},
     Context, EmptyMutation, EmptySubscription, MergedObject, OutputType, Result,
 };
 use base64::{engine::general_purpose, Engine as _};
+use tokio::sync::Mutex;
 
 pub(crate) use self::discussion::Discussion;
 pub(crate) use self::issue::Issue;
 pub(crate) use self::pull_request::PullRequest;
-use crate::database::Database;
+use crate::{database::Database, rag_sample::RagOllamaSystem};
 
 /// The default page size for connections when neither `first` nor `last` is
 /// provided.
@@ -27,6 +29,7 @@ pub(crate) struct Query(
     issue::IssueQuery,
     pull_request::PullRequestQuery,
     discussion::DiscussionQuery,
+    rag::RagQuery,
 );
 
 pub(crate) type Schema = async_graphql::Schema<Query, EmptyMutation, EmptySubscription>;
@@ -50,9 +53,10 @@ where
     connection
 }
 
-pub(crate) fn schema(database: Database) -> Schema {
+pub(crate) fn schema(database: Database, rag: Arc<Mutex<RagOllamaSystem>>) -> Schema {
     Schema::build(Query::default(), EmptyMutation, EmptySubscription)
         .data(database)
+        .data(rag)
         .finish()
 }
 
@@ -140,7 +144,8 @@ impl TestSchema {
     fn new() -> Self {
         let db_dir = tempfile::tempdir().unwrap();
         let db = Database::connect(db_dir.path()).unwrap();
-        let schema = schema(db.clone());
+        let rag = Arc::new(Mutex::new(RagOllamaSystem::default()));
+        let schema = schema(db.clone(), rag);
         Self {
             _dir: db_dir,
             db,
