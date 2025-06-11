@@ -19,6 +19,7 @@ use crate::github::discussions::{
     DiscussionsRepositoryDiscussionsNodesLabels, DiscussionsRepositoryDiscussionsNodesReactions,
     ReactionContent,
 };
+use crate::github::GithubData;
 use crate::graphql::Discussion;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -37,6 +38,12 @@ pub struct DiscussionDbSchema {
     pub(crate) labels: Option<Labels>,
     pub(crate) comments: Comments,
     pub(crate) reactions: Reactions,
+}
+
+impl GithubData for DiscussionDbSchema {
+    fn get_number(&self) -> i64 {
+        self.number
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
