@@ -16,16 +16,26 @@ directories = "6"
 git2 = "0.20"
 
 graphql_client = "0.14"
+ollama-rs = { version = "0.3.1", features = ["macros"] }
+ort = { version = "1.16.3", features = ["load-dynamic"] }
+qdrant-client = "1.14.0"
 regex = "1"
 reqwest = { version = "0.12", features = ["json"] }
+rust-bert = { version = "0.23", features = ["hf-tokenizers", "onnx"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sled = "0.34"
+tch = { version = "0.17", features = ["download-libtorch"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
 toml = "0.8"
 tracing = "0.1"
 tracing-subscriber = "0.3"
 warp = { version = "0.3", features = ["tls"] }
+schemars = { version = "0.8", default-features = false }
 
 [dev-dependencies]
 tempfile = "3"
+
+[[bin]]
+name = "rag"
+path = "src/bin/rag_test.rs"

@@ -113,6 +113,14 @@ impl Database {
             self.pull_request_tree.range(start..).into()
         }
     }
+
+    pub(crate) fn count_issues_by_author(&self, owner: &str, repo: &str, author: &str) -> usize {
+        let prefix = format!("{owner}/{repo}#");
+        self.issues(Some(prefix.as_bytes()), None)
+            .filter_map(Result::ok)
+            .filter(|issue| issue.author == author)
+            .count()
+    }
 }
 
 pub(crate) trait TryFromKeyValue {
