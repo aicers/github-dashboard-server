@@ -1,0 +1,106 @@
+# This is exposed only for [`Schema`], and not used directly.
+type Query {
+  issueStat(filter: IssueStatFilter!): IssueStat!
+}
+
+input IssueStatFilter {
+  # The GitHub usernames of users assigned to the issue.
+  assignees: [String!]
+
+  # Custom author input.
+  authorInput: AuthorInput
+
+  # Repository name.
+  repo: String
+
+  # Datetime the issue was created.
+  createdAt: DateTimeRange
+
+  # Datetime the issue was closed.
+  closedAt: DateTimeRange
+
+  # Datetime the issue was updated.
+  updatedAt: DateTimeRange
+
+  # Issue priority.
+  # It can be null. Use this field if you want to filter by specific priority.
+  priority: IssuePriority
+
+  # The author and assignee pair.
+  authorAssigneePair: IssueAuthorAssigneePair
+
+  # The length of the issue body in characters.
+  # This is the precise number that cannot be compared using ‘greater than’ or ‘less than’ operators.
+  bodyLength: Int
+
+  # true if the issue is open, false if closed.
+  isOpen: Boolean
+
+  # The number of days it took to close the issue.
+  daysToClose: Float
+
+  # The number of comments on the issue.
+  # This is the precise number that cannot be compared using ‘greater than’ or ‘less than’ operators.
+  numOfComments: Int
+}
+
+type IssueStat {
+  # The number of open issues.
+  openIssueCount: Int!
+
+  # Total number of issues.
+  totalIssueCount: Int!
+
+  # Urls of filtered issues.
+  issues: [Issue]!
+}
+
+input DateTimeRange {
+  # RFC3339 datetime string.
+  gte: String
+  # RFC3339 datetime string.
+  lt: String
+}
+
+# P0 is the highest priority, P1 is medium, and P2 is the lowest.
+enum IssuePriority {
+  P0
+  P1
+  P2
+}
+
+input AuthorInput {
+  # GitHub username.
+  username: String
+  # IPv4 address a user registered with.
+  ipAddress: String
+  # IPv4 address range a user registered with.
+  ipAddressRange: IpAddressRange
+  # A user's working status.
+  status: AuthorStatus
+}
+
+input IpAddressRange {
+  # IPv4 address
+  start: String!
+  # IPv4 address
+  end: String!
+}
+
+enum AuthorStatus {
+  OnVacation
+  OnBusiness
+}
+
+input IssueAuthorAssigneePair {
+  author: String!
+  assignee: String!
+}
+
+type Issue {
+  repo: String!
+  number: Int!
+  title: String!
+  author: String!
+  url: String!
+}

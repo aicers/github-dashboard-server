@@ -45,10 +45,15 @@ async fn main() -> Result<()> {
         // let sdl = schema.sdl();
 
         // Contrived schema for test.
-        let sdl = fs::read_to_string("src/semantic_parsing/schema.graphql")?;
-        let query = semantic_parsing::invoke(&sdl, &prompt).await?;
-        println!("Generated GraphQL Query:\n{query}");
-        let response = schema.execute(query).await;
+        let schema_doc = fs::read_to_string("src/semantic_parsing/schema.graphql")?;
+
+        // let query = semantic_parsing::invoke(&schema_doc, &prompt).await?;
+        // println!("Generated GraphQL Query:\n{query}");
+        // let response = schema.execute(query).await;
+
+        // let response = semantic_parsing::llm_with_command_executor(&prompt).await?;
+
+        let response = semantic_parsing::invoke(schema, &schema_doc, &prompt, "").await?;
         println!("Response: {response:?}");
         exit(0);
     }

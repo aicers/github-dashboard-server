@@ -1122,6 +1122,7 @@ dependencies = [
  "anyhow",
  "async-graphql",
  "async-graphql-warp",
+ "async-trait",
  "base64 0.22.1",
  "bincode",
  "chrono",
