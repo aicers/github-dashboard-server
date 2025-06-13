@@ -1,24 +1,25 @@
 use std::{sync::Arc, time::Duration};
+use std::str::FromStr;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Error, Result};
 use chrono::Utc;
 use graphql_client::{GraphQLQuery, QueryBody, Response as GraphQlResponse};
 use reqwest::{Client, RequestBuilder, Response};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tokio::time;
 use tracing::error;
-
+use crate::graphql::issue::{Comment, SubIssue, ParentIssue, ProjectV2Item, ProjectV2ItemConnection, PullRequestRef};
 use crate::{database::Database, github::{
-    issues::IssuesRepositoryIssuesNodesAuthor::User as userName,
     pull_requests::PullRequestsRepositoryPullRequestsNodesReviewRequestsNodesRequestedReviewer::User,
 }, settings::Repository as RepoInfo};
-
 const GITHUB_FETCH_SIZE: i64 = 10;
 const GITHUB_URL: &str = "https://api.github.com/graphql";
 const APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
 const INIT_TIME: &str = "1992-06-05T00:00:00Z";
 
 type DateTime = String;
+#[allow(clippy::upper_case_acronyms)]
+type URI = String;
 
 #[derive(GraphQLQuery)]
 #[graphql(
@@ -27,6 +28,18 @@ type DateTime = String;
     response_derives = "Debug"
 )]
 struct Issues;
+pub(crate) use issues::IssueState;
+
+impl FromStr for IssueState {
+    type Err = Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "OPEN" => Ok(IssueState::OPEN),
+            "CLOSED" => Ok(IssueState::CLOSED),
+            other => Err(Error::msg(format!("Unknown IssueState: {other}"))),
+        }
+    }
+}
 
 #[derive(GraphQLQuery)]
 #[graphql(
@@ -35,12 +48,25 @@ struct Issues;
 )]
 struct PullRequests;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub(super) struct GitHubIssue {
+    pub(super) id: String,
     pub(super) number: i64,
     pub(super) title: String,
     pub(super) author: String,
-    pub(super) closed_at: Option<DateTime>,
+    pub(super) body: String,
+    pub(super) state: IssueState,
+    pub(super) assignees: Vec<String>,
+    pub(super) labels: Vec<String>,
+    pub(super) comments: Vec<Comment>,
+    pub(super) project_items: ProjectV2ItemConnection,
+    pub(super) sub_issues: Vec<SubIssue>,
+    pub(super) parent: Option<ParentIssue>,
+    pub(super) url: String,
+    pub(super) closed_by_pull_requests: Vec<PullRequestRef>,
+    pub(super) created_at: String,
+    pub(super) updated_at: String,
+    pub(super) closed_at: Option<String>,
 }
 
 #[derive(Debug)]
@@ -116,6 +142,7 @@ pub(super) async fn fetch_periodically(
     }
 }
 
+#[allow(clippy::too_many_lines)]
 async fn send_github_issue_query(
     owner: &str,
     name: &str,
@@ -132,38 +159,137 @@ async fn send_github_issue_query(
             first: Some(GITHUB_FETCH_SIZE),
             last: None,
             before: None,
-            after: end_cur,
+            after: end_cur.take(),
             since: Some(since.to_string()),
         };
         let resp_body: GraphQlResponse<issues::ResponseData> =
             send_query::<Issues>(token, var).await?.json().await?;
         if let Some(data) = resp_body.data {
             if let Some(repository) = data.repository {
-                if let Some(nodes) = repository.issues.nodes.as_ref() {
-                    for issue in nodes.iter().flatten() {
-                        let mut author: String = String::new();
+                let nodes = repository.issues.nodes.unwrap_or_default();
+                for issue in nodes.into_iter().flatten() {
+                    let author = match issue.author {
+                        Some(issues::IssuesRepositoryIssuesNodesAuthor::User(u)) => u.login,
+                        _ => String::new(),
+                    };
 
-                        let author_ref = issue.author.as_ref().context("Missing issue author")?;
-                        if let userName(on_user) = author_ref {
-                            author.clone_from(&on_user.login.clone());
-                        }
-                        issues.push(GitHubIssue {
-                            number: issue.number,
-                            title: issue.title.to_string(),
-                            author,
-                            closed_at: issue.closed_at.clone(),
-                        });
-                    }
-                    if !repository.issues.page_info.has_next_page {
-                        total_issue.push(issues);
-                        break;
-                    }
-                    end_cur = repository.issues.page_info.end_cursor;
-                    continue;
+                    issues.push(GitHubIssue {
+                    id: issue.id,
+                    number: issue.number,
+                    title: issue.title,
+                    author,
+                    body: issue.body,
+                    state: issue.state,
+                    assignees: issue.assignees.nodes.unwrap_or_default().into_iter().flatten().map(|n| n.login).collect(),
+                    labels: issue.labels.and_then(|l| l.nodes).unwrap_or_default().into_iter().flatten().map(|node| node.name).collect(),
+                    comments: issue.comments.nodes.unwrap_or_default().into_iter().flatten().map(|comment| Comment {
+                        author: match comment.author {
+                            Some(issues::IssuesRepositoryIssuesNodesCommentsNodesAuthor::User(u)) => u.login,
+                            _ => String::new(),
+                        },
+                        body: comment.body,
+                        created_at: comment.created_at,
+                        id: comment.id,
+                        repository_name: comment.repository.name,
+                        updated_at: comment.updated_at,
+                        url: comment.url,
+                    }).collect(),
+                    project_items: ProjectV2ItemConnection {
+                        total_count: issue.project_items.total_count.try_into().unwrap_or_default(),
+                        nodes: issue
+                            .project_items
+                            .nodes
+                            .unwrap_or_default()
+                            .into_iter()
+                            .flatten()
+                            .map(|node| ProjectV2Item {
+                                id: node.id,
+                                todo_status: node.todo_status.map(|e| format!("{e:?}")),
+                                todo_priority: node.todo_priority.map(|e| format!("{e:?}")),
+                                todo_size: node.todo_size.map(|e| format!("{e:?}")),
+                                todo_initiation_option:
+                                    node.todo_initiation_option.map(|e| format!("{e:?}")),
+                                todo_pending_days: node.todo_pending_days.map(|e| {
+                                    format!("{e:?}")
+                                        .chars()
+                                        .filter(char::is_ascii_digit)
+                                        .collect::<String>()
+                                        .parse::<i32>()
+                                        .unwrap_or_default()
+                                }),
+
+                            })
+                            .collect(),
+                    },
+
+                    sub_issues: issue
+                        .sub_issues
+                        .nodes
+                        .into_iter()
+                        .flatten()
+                        .flatten()
+                        .map(|si| SubIssue {
+                            id: si.id,
+                            number: si.number.try_into().unwrap_or_default(),
+                            title: si.title,
+                            state: si.state,
+                            closed_at: si.closed_at,
+                            created_at: si.created_at,
+                            updated_at: si.updated_at,
+                            author: match si.author {
+                                Some(issues::IssuesRepositoryIssuesNodesSubIssuesNodesAuthor::User(u)) => u.login,
+                                _ => String::new(),
+                            },
+                            assignees: si
+                                .assignees
+                                .nodes
+                                .into_iter()
+                                .flatten()
+                                .flatten()
+                                .map(|n| n.login)
+                                .collect(),
+                    })
+                    .collect(),
+                    parent: issue.parent.map(|parent| ParentIssue {
+                            id: parent.id,
+                            number: i32::try_from(parent.number).unwrap_or_default(),
+                            title: parent.title,
+                        }),
+                    url: issue.url,
+                    closed_by_pull_requests: issue
+                        .closed_by_pull_requests_references
+                        .map(|r| r.edges)
+                        .unwrap_or_default()
+                        .into_iter()
+                        .flatten()
+                        .flatten()
+                        .filter_map(|edge| edge.node.map(|node| PullRequestRef {
+                            number: i32::try_from(node.number).unwrap_or_default(),
+                            state: format!("{:?}", node.state),
+                            closed_at: node.closed_at,
+                            created_at: node.created_at,
+                            updated_at: node.updated_at,
+                            author: match node.author {
+                                Some(issues::IssuesRepositoryIssuesNodesClosedByPullRequestsReferencesEdgesNodeAuthor::User(u)) => u.login,
+                                _ => String::new(),
+                            },
+                            url: node.url,
+                    }))
+                    .collect(),
+                    created_at: issue.created_at,
+                    updated_at: issue.updated_at,
+                    closed_at: issue.closed_at,
+                });
                 }
+                if !repository.issues.page_info.has_next_page {
+                    total_issue.push(issues);
+                    break;
+                }
+                end_cur = repository.issues.page_info.end_cursor;
+                continue;
             }
+            bail!("Failed to parse response data");
         }
-        bail!("Failed to parse response data");
     }
     Ok(total_issue)
 }
