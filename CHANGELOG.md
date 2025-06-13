@@ -11,6 +11,8 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Tracing with a filter set by `RUST_LOG` environment variable.
 - Added support for passing the SSH passphrase through the `SSH_PASSPHRASE`
   environment variable.
+- Exposed a new `discussions` query in the server’s GraphQL API to query the
+  stored discussion data.
 
 ### Changed
 
