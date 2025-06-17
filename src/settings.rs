@@ -1,6 +1,7 @@
-// src/settings.rs
-
-use std::{net::SocketAddr, path::Path};
+use std::{
+    net::SocketAddr,
+    path::{Path, PathBuf},
+};
 
 use clap::Parser;
 use config::{builder::DefaultState, ConfigBuilder, ConfigError, File};
@@ -38,13 +39,34 @@ pub struct RagSettings {
     pub namespace: String,
     pub database: String,
     pub ollama_url: String,
+    pub embed_model: String, // <-- newly added
     pub llm_model: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct Repository {
+    pub(crate) owner: String,
+    pub(crate) name: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub(crate) struct Certification {
+    pub(crate) token: String,
+    pub(crate) ssh: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub(crate) struct Database {
+    pub(crate) db_path: PathBuf,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Settings {
     pub web: Web,
     pub rag: RagSettings,
+    pub(crate) repositories: Vec<Repository>,
+    pub(crate) certification: Certification,
+    pub(crate) database: Database,
 }
 
 impl Settings {

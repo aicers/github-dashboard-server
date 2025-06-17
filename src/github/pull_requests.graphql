@@ -1,18 +1,25 @@
-query PullRequests($owner: String!, $name:String!, $first:Int, $last:Int, $before:String, $after:String) {
-  repository(owner: $owner name: $name) {
-    pullRequests(first: $first last: $last before: $before after: $after) {
+query PullRequests(
+  $owner: String!
+  $name: String!
+  $first: Int
+  $last: Int
+  $before: String
+  $after: String
+) {
+  repository(owner: $owner, name: $name) {
+    pullRequests(first: $first, last: $last, before: $before, after: $after) {
       pageInfo {
-        hasNextPage,
-        endCursor,
+        hasNextPage
+        endCursor
       }
       nodes {
-        number,
-        title,
+        number
+        title
         assignees(last: 15) {
           nodes {
             login
           }
-        },
+        }
         reviewRequests(first: 10) {
           nodes {
             requestedReviewer {

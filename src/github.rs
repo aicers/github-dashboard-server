@@ -4,18 +4,22 @@ use anyhow::{bail, Context, Result};
 use chrono::Utc;
 use graphql_client::{GraphQLQuery, QueryBody, Response as GraphQlResponse};
 use reqwest::{Client, RequestBuilder, Response};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tokio::time;
 use tracing::error;
 
-use crate::{database::Database, github::{
-    issues::IssuesRepositoryIssuesNodesAuthor::User as userName,
-    pull_requests::PullRequestsRepositoryPullRequestsNodesReviewRequestsNodesRequestedReviewer::User,
-}, settings::Repository as RepoInfo};
+use crate::{
+    database::Database,
+    github::{
+        issues::IssuesRepositoryIssuesNodesAuthor::User as userName,
+        pull_requests::PullRequestsRepositoryPullRequestsNodesReviewRequestsNodesRequestedReviewer::User,
+    },
+    settings::Repository as RepoInfo,
+};
 
 const GITHUB_FETCH_SIZE: i64 = 10;
 const GITHUB_URL: &str = "https://api.github.com/graphql";
-const APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
+const APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
 const INIT_TIME: &str = "1992-06-05T00:00:00Z";
 
 type DateTime = String;
@@ -51,6 +55,88 @@ pub(super) struct GitHubPullRequests {
     pub(super) reviewers: Vec<String>,
 }
 
+pub async fn fetch_issues(owner: &str, name: &str, token: &str) -> Result<Vec<(String, String)>> {
+    let query = r"
+    query($owner: String!, $name: String!, $since: DateTime!) {
+      repository(owner: $owner, name: $name) {
+        issues(first: 100, filterBy: {since: $since}) {
+          nodes { id title body createdAt author { login } }
+        }
+      }
+    }
+    ";
+
+    let vars = serde_json::json!({
+        "owner": owner,
+        "name": name,
+        "since": "2024-05-01T00:00:00Z"
+    });
+
+    let client = Client::builder().user_agent(APP_USER_AGENT).build()?;
+
+    let resp = client
+        .post(GITHUB_URL)
+        .bearer_auth(token)
+        .json(&serde_json::json!({ "query": query, "variables": vars }))
+        .send()
+        .await
+        .context("GitHub GraphQL request failed")?
+        .error_for_status()
+        .context("GitHub returned error status")?
+        .json::<LightweightGraphQLResponse>()
+        .await
+        .context("Parsing GitHub JSON failed")?;
+
+    let mut out = Vec::new();
+    if let Some(data) = resp.data {
+        if let Some(repo) = data.repository {
+            for issue in repo.issues.nodes {
+                let body = issue.body.unwrap_or_default();
+                let author = issue
+                    .author
+                    .and_then(|a| a.login)
+                    .unwrap_or_else(|| "unknown".to_string());
+                let text = format!("Author: {}\nTitle: {}\n\n{}", author, issue.title, body);
+                out.push((issue.id, text));
+            }
+        }
+    }
+    Ok(out)
+}
+
+#[derive(Deserialize)]
+struct LightweightGraphQLResponse {
+    data: Option<LightweightGraphQlData>,
+}
+
+#[derive(Deserialize)]
+struct LightweightGraphQlData {
+    repository: Option<LightweightRepoIssues>,
+}
+
+#[derive(Deserialize)]
+struct LightweightRepoIssues {
+    issues: LightweightIssueConnection,
+}
+
+#[derive(Deserialize)]
+struct LightweightIssueConnection {
+    nodes: Vec<LightweightIssueNode>,
+}
+
+#[derive(Deserialize)]
+struct LightweightIssueNode {
+    id: String,
+    title: String,
+    body: Option<String>,
+    author: Option<LightweightIssueAuthor>,
+}
+
+#[derive(Deserialize)]
+struct LightweightIssueAuthor {
+    login: Option<String>,
+}
+
 pub(super) async fn fetch_periodically(
     repositories: Arc<Vec<RepoInfo>>,
     token: String,
@@ -61,13 +147,10 @@ pub(super) async fn fetch_periodically(
     let mut itv = time::interval(period);
     loop {
         itv.tick().await;
-        let since = match db.select_db("since") {
-            Ok(r) => r,
-            Err(_) => INIT_TIME.to_string(),
-        };
-        if let Err(e) = db.insert_db("since", format!("{:?}", Utc::now())) {
-            error!("Insert DateTime Error: {}", e);
-        }
+        let since = db
+            .select_db("since")
+            .unwrap_or_else(|_| INIT_TIME.to_string());
+        let _ = db.insert_db("since", format!("{:?}", Utc::now()));
 
         for repoinfo in repositories.iter() {
             let mut re_itv = time::interval(retry);
@@ -77,16 +160,12 @@ pub(super) async fn fetch_periodically(
                 {
                     Ok(resps) => {
                         for resp in resps {
-                            if let Err(error) =
-                                db.insert_issues(resp, &repoinfo.owner, &repoinfo.name)
-                            {
-                                error!("Problem while insert Sled Database. {}", error);
-                            }
+                            let _ = db.insert_issues(resp, &repoinfo.owner, &repoinfo.name);
                         }
                         break;
                     }
                     Err(error) => {
-                        error!("Problem while sending github issue query. Query retransmission is done after 5 minutes. {}", error);
+                        error!("Retrying GitHub issue query in 5 min: {}", error);
                     }
                 }
                 itv.reset();
@@ -98,16 +177,12 @@ pub(super) async fn fetch_periodically(
                 match send_github_pr_query(&repoinfo.owner, &repoinfo.name, &token).await {
                     Ok(resps) => {
                         for resp in resps {
-                            if let Err(error) =
-                                db.insert_pull_requests(resp, &repoinfo.owner, &repoinfo.name)
-                            {
-                                error!("Problem while insert Sled Database. {}", error);
-                            }
+                            let _ = db.insert_pull_requests(resp, &repoinfo.owner, &repoinfo.name);
                         }
                         break;
                     }
                     Err(error) => {
-                        error!("Problem while sending github pr query. Query retransmission is done after 5 minutes. {}", error);
+                        error!("Retrying GitHub PR query in 5 min: {}", error);
                     }
                 }
                 itv.reset();
@@ -132,7 +207,7 @@ async fn send_github_issue_query(
             first: Some(GITHUB_FETCH_SIZE),
             last: None,
             before: None,
-            after: end_cur,
+            after: end_cur.clone(),
             since: Some(since.to_string()),
         };
         let resp_body: GraphQlResponse<issues::ResponseData> =
@@ -141,12 +216,12 @@ async fn send_github_issue_query(
             if let Some(repository) = data.repository {
                 if let Some(nodes) = repository.issues.nodes.as_ref() {
                     for issue in nodes.iter().flatten() {
-                        let mut author: String = String::new();
-
                         let author_ref = issue.author.as_ref().context("Missing issue author")?;
-                        if let userName(on_user) = author_ref {
-                            author.clone_from(&on_user.login.clone());
-                        }
+                        let author = if let userName(on_user) = author_ref {
+                            on_user.login.clone()
+                        } else {
+                            "unknown".to_string()
+                        };
                         issues.push(GitHubIssue {
                             number: issue.number,
                             title: issue.title.to_string(),
@@ -183,34 +258,46 @@ async fn send_github_pr_query(
             first: Some(GITHUB_FETCH_SIZE),
             last: None,
             before: None,
-            after: end_cur,
+            after: end_cur.clone(),
         };
-
         let resp_body: GraphQlResponse<pull_requests::ResponseData> =
             send_query::<PullRequests>(token, var).await?.json().await?;
         if let Some(data) = resp_body.data {
             if let Some(repository) = data.repository {
                 if let Some(nodes) = repository.pull_requests.nodes.as_ref() {
                     for pr in nodes.iter().flatten() {
-                        let mut assignees: Vec<String> = Vec::new();
-                        let mut reviewers: Vec<String> = Vec::new();
-
-                        if let Some(assignees_nodes) = pr.assignees.nodes.as_ref() {
-                            for pr_assignees in assignees_nodes.iter().flatten() {
-                                assignees.push(pr_assignees.login.clone());
-                            }
-                        }
-                        if let Some(reviewers_nodes) =
-                            pr.review_requests.as_ref().and_then(|r| r.nodes.as_ref())
-                        {
-                            for pr_reviewers in reviewers_nodes.iter().flatten() {
-                                if let Some(User(on_user)) =
-                                    pr_reviewers.requested_reviewer.as_ref()
-                                {
-                                    reviewers.push(on_user.login.clone());
-                                }
-                            }
-                        }
+                        let assignees = pr
+                            .assignees
+                            .nodes
+                            .as_ref()
+                            .map(|nodes| {
+                                nodes
+                                    .iter()
+                                    .flatten()
+                                    .map(|u| u.login.clone())
+                                    .collect::<Vec<_>>()
+                            })
+                            .unwrap_or_default();
+                        let reviewers = pr
+                            .review_requests
+                            .as_ref()
+                            .and_then(|r| r.nodes.as_ref())
+                            .map(|nodes| {
+                                nodes
+                                    .iter()
+                                    .flatten()
+                                    .filter_map(|r| {
+                                        r.requested_reviewer.as_ref().and_then(|u| {
+                                            if let User(on_user) = u {
+                                                Some(on_user.login.clone())
+                                            } else {
+                                                None
+                                            }
+                                        })
+                                    })
+                                    .collect()
+                            })
+                            .unwrap_or_default();
 
                         prs.push(GitHubPullRequests {
                             number: pr.number,
@@ -226,8 +313,6 @@ async fn send_github_pr_query(
                     end_cur = repository.pull_requests.page_info.end_cursor;
                     continue;
                 }
-                end_cur = repository.pull_requests.page_info.end_cursor;
-                continue;
             }
         }
         bail!("Failed to parse response data");
@@ -240,11 +325,10 @@ where
     V: Serialize,
 {
     let client = Client::builder().user_agent(APP_USER_AGENT).build()?;
-    let client = client
+    Ok(client
         .post(GITHUB_URL)
         .bearer_auth(token)
-        .json(&request_body);
-    Ok(client)
+        .json(request_body))
 }
 
 async fn send_query<T>(token: &str, var: T::Variables) -> Result<Response>
