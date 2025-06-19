@@ -1,13 +1,16 @@
 mod issue;
-mod pull_request;
+pub mod pull_request;
 
 use std::fmt::Display;
 
 use async_graphql::{
     types::connection::{Connection, Edge, EmptyFields},
-    Context, EmptyMutation, EmptySubscription, MergedObject, OutputType, Result,
+    Context, EmptyMutation, EmptySubscription, InputValueError, InputValueResult, MergedObject,
+    OutputType, Result, Scalar, ScalarType, Value,
 };
 use base64::{engine::general_purpose, Engine as _};
+use jiff::Timestamp;
+use serde::{Deserialize, Serialize};
 
 pub(crate) use self::issue::Issue;
 pub(crate) use self::pull_request::PullRequest;
@@ -25,6 +28,22 @@ pub(crate) struct Query(issue::IssueQuery, pull_request::PullRequestQuery);
 
 pub(crate) type Schema = async_graphql::Schema<Query, EmptyMutation, EmptySubscription>;
 
+#[derive(Debug, Deserialize, Serialize)]
+pub(crate) struct DateTimeUtc(pub(crate) Timestamp);
+
+#[Scalar]
+impl ScalarType for DateTimeUtc {
+    fn parse(value: Value) -> InputValueResult<Self> {
+        match &value {
+            Value::String(s) => Ok(DateTimeUtc(s.parse()?)),
+            _ => Err(InputValueError::expected_type(value)),
+        }
+    }
+
+    fn to_value(&self) -> Value {
+        Value::String(self.0.to_string())
+    }
+}
 fn connect_cursor<T>(
     select_vec: Vec<T>,
     prev: bool,
