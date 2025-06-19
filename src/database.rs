@@ -10,7 +10,7 @@ pub mod discussion;
 pub(crate) use discussion::DiscussionDbSchema;
 
 use crate::{
-    github::{GitHubIssue, GitHubPullRequests},
+    github::{GitHubIssue, GitHubPullRequestNode},
     graphql::{issue::Issue, pull_request::PullRequest},
 };
 
@@ -82,17 +82,13 @@ impl Database {
 
     pub(crate) fn insert_pull_requests(
         &self,
-        resp: Vec<GitHubPullRequests>,
+        resp: Vec<GitHubPullRequestNode>,
         owner: &str,
         name: &str,
     ) -> Result<()> {
         for item in resp {
             let keystr: String = format!("{owner}/{name}#{}", item.number);
-            Database::insert(
-                &keystr,
-                (&item.title, &item.assignees, &item.reviewers),
-                &self.pull_request_tree,
-            )?;
+            Database::insert(&keystr, &item, &self.pull_request_tree)?;
         }
         Ok(())
     }
