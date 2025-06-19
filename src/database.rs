@@ -83,11 +83,7 @@ impl Database {
     ) -> Result<()> {
         for item in resp {
             let keystr: String = format!("{owner}/{name}#{}", item.number);
-            Database::insert(
-                &keystr,
-                (&item.title, &item.assignees, &item.reviewers),
-                &self.pull_request_tree,
-            )?;
+            Database::insert(&keystr, &item, &self.pull_request_tree)?;
         }
         Ok(())
     }
@@ -155,7 +151,7 @@ impl<T: TryFromKeyValue> DoubleEndedIterator for Iter<T> {
     }
 }
 
-pub(crate) fn parse_key(key: &[u8]) -> Result<(String, String, i64)> {
+pub(crate) fn parse_key(key: &[u8]) -> Result<(String, String, i32)> {
     let re = Regex::new(r"(?P<owner>\S+)/(?P<name>\S+)#(?P<number>[0-9]+)").expect("valid regex");
     if let Some(caps) = re.captures(
         String::from_utf8(key.to_vec())
@@ -176,7 +172,7 @@ pub(crate) fn parse_key(key: &[u8]) -> Result<(String, String, i64)> {
             .name("number")
             .ok_or_else(|| anyhow!("invalid key"))?
             .as_str()
-            .parse::<i64>()
+            .parse::<i32>()
             .context("invalid key")?;
         Ok((owner, name, number))
     } else {

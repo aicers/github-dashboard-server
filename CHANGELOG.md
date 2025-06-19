@@ -11,6 +11,8 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Tracing with a filter set by `RUST_LOG` environment variable.
 - Added support for passing the SSH passphrase through the `SSH_PASSPHRASE`
   environment variable.
+- Added new fields to the `PullRequests` GraphQL query and corresponding fields to
+  the `graphql::pull_request::PullRequest` struct.
 
 ### Changed
 

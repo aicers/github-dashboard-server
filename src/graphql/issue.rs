@@ -23,11 +23,11 @@ impl TryFromKeyValue for Issue {
             .with_context(|| format!("invalid key in database: {key:02x?}"))?;
         let (title, author, _) = bincode::deserialize::<(String, String, Option<String>)>(value)?;
         let issue = Issue {
-            title,
-            author,
             owner,
             repo,
-            number: i32::try_from(number).unwrap_or(i32::MAX),
+            number,
+            title,
+            author,
         };
         Ok(issue)
     }
