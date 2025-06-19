@@ -1,24 +1,136 @@
-query PullRequests($owner: String!, $name:String!, $first:Int, $last:Int, $before:String, $after:String) {
-  repository(owner: $owner name: $name) {
-    pullRequests(first: $first last: $last before: $before after: $after) {
+query PullRequests(
+  $owner: String!
+  $name: String!
+  $first: Int
+  $last: Int
+  $before: String
+  $after: String
+) {
+  repository(owner: $owner, name: $name) {
+    pullRequests(first: $first, last: $last, before: $before, after: $after) {
       pageInfo {
-        hasNextPage,
-        endCursor,
+        hasNextPage
+        endCursor
       }
       nodes {
-        number,
-        title,
+        id
+        number
+        title
+        body
+        state
+        createdAt
+        updatedAt
+        closedAt
+        mergedAt
+        author {
+          __typename
+          ... on User {
+            login
+          }
+        }
+        additions
+        deletions
+        url
+        repository {
+          owner {
+            __typename
+            login
+          }
+          name
+        }
+        # TODO: #181
+        labels(last: 5) {
+          nodes {
+            name
+          }
+        }
+        # TODO: #181
+        comments(last: 100) {
+          totalCount
+          nodes {
+            body
+            createdAt
+            updatedAt
+            author {
+              __typename
+              ... on User {
+                login
+              }
+            }
+          }
+        }
+        reviewDecision
+        # TODO: #181
         assignees(last: 15) {
           nodes {
             login
           }
-        },
-        reviewRequests(first: 10) {
+        }
+        # TODO: #181
+        reviewRequests(last: 10) {
           nodes {
             requestedReviewer {
               __typename
               ... on User {
                 login
+              }
+            }
+          }
+        }
+        # TODO: #181
+        reviews(last: 10) {
+          totalCount
+          nodes {
+            author {
+              __typename
+              ... on User {
+                login
+              }
+            }
+            state
+            body
+            url
+            createdAt
+            publishedAt
+            submittedAt
+            isMinimized
+            # TODO: #181
+            comments(last: 100) {
+              totalCount
+              nodes {
+                body
+                createdAt
+                updatedAt
+                author {
+                  __typename
+                  ... on User {
+                    login
+                  }
+                }
+              }
+            }
+          }
+        }
+        # TODO: #181
+        commits(last: 20) {
+          totalCount
+          nodes {
+            commit {
+              additions
+              deletions
+              message
+              messageBody
+              author {
+                user {
+                  login
+                }
+              }
+              changedFilesIfAvailable
+              committedDate
+              committer {
+                user {
+                  login
+                }
               }
             }
           }
