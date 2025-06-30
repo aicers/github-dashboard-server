@@ -1,8 +1,8 @@
 use std::{sync::Arc, time::Duration};
 
 use anyhow::{bail, Context, Result};
-use chrono::Utc;
 use graphql_client::{GraphQLQuery, QueryBody, Response as GraphQlResponse};
+use jiff::Timestamp;
 use reqwest::{Client, RequestBuilder, Response};
 use serde::Serialize;
 use tokio::time;
@@ -65,7 +65,7 @@ pub(super) async fn fetch_periodically(
             Ok(r) => r,
             Err(_) => INIT_TIME.to_string(),
         };
-        if let Err(e) = db.insert_db("since", format!("{:?}", Utc::now())) {
+        if let Err(e) = db.insert_db("since", format!("{:?}", Timestamp::now())) {
             error!("Insert DateTime Error: {}", e);
         }
 
