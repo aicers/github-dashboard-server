@@ -83,11 +83,7 @@ impl Database {
     ) -> Result<()> {
         for item in resp {
             let keystr: String = format!("{owner}/{name}#{}", item.number);
-            Database::insert(
-                &keystr,
-                (&item.title, &item.assignees, &item.reviewers),
-                &self.pull_request_tree,
-            )?;
+            Database::insert(&keystr, &item, &self.pull_request_tree)?;
         }
         Ok(())
     }
