@@ -3,10 +3,16 @@ use std::fmt;
 use anyhow::Context as AnyhowContext;
 use async_graphql::{
     connection::{query, Connection, EmptyFields},
-    Context, Object, Result, SimpleObject,
+    scalar, Context, Object, Result, SimpleObject,
 };
 
-use crate::database::{self, Database, TryFromKeyValue};
+use crate::{
+    database::{self, Database, TryFromKeyValue},
+    github::{issues::IssueState, GitHubIssue},
+    graphql::DateTimeUtc,
+};
+
+scalar!(IssueState);
 
 #[derive(SimpleObject)]
 pub(crate) struct Issue {
@@ -15,19 +21,32 @@ pub(crate) struct Issue {
     pub(crate) number: i32,
     pub(crate) title: String,
     pub(crate) author: String,
+    pub(crate) created_at: DateTimeUtc,
+    pub(crate) state: IssueState,
+    pub(crate) assignees: Vec<String>,
 }
 
 impl TryFromKeyValue for Issue {
     fn try_from_key_value(key: &[u8], value: &[u8]) -> anyhow::Result<Self> {
         let (owner, repo, number) = database::parse_key(key)
             .with_context(|| format!("invalid key in database: {key:02x?}"))?;
-        let (title, author, _) = bincode::deserialize::<(String, String, Option<String>)>(value)?;
+        let GitHubIssue {
+            title,
+            author,
+            created_at,
+            state,
+            assignees,
+            ..
+        } = bincode::deserialize::<GitHubIssue>(value)?;
         let issue = Issue {
             title,
             author,
             owner,
             repo,
             number: i32::try_from(number).unwrap_or(i32::MAX),
+            created_at: DateTimeUtc(created_at),
+            state,
+            assignees,
         };
         Ok(issue)
     }
@@ -69,6 +88,15 @@ impl IssueQuery {
 mod tests {
     use crate::{github::GitHubIssue, graphql::TestSchema};
 
+    fn create_issues(n: usize) -> Vec<GitHubIssue> {
+        (1..=n)
+            .map(|i| GitHubIssue {
+                number: i64::try_from(i).unwrap(),
+                ..Default::default()
+            })
+            .collect()
+    }
+
     #[tokio::test]
     async fn issues_empty() {
         let schema = TestSchema::new();
@@ -89,26 +117,7 @@ mod tests {
     #[tokio::test]
     async fn issues_first() {
         let schema = TestSchema::new();
-        let issues = vec![
-            GitHubIssue {
-                number: 1,
-                title: "issue 1".to_string(),
-                author: "author 1".to_string(),
-                closed_at: None,
-            },
-            GitHubIssue {
-                number: 2,
-                title: "issue 2".to_string(),
-                author: "author 2".to_string(),
-                closed_at: None,
-            },
-            GitHubIssue {
-                number: 3,
-                title: "issue 3".to_string(),
-                author: "author 3".to_string(),
-                closed_at: None,
-            },
-        ];
+        let issues = create_issues(3);
         schema.db.insert_issues(issues, "owner", "name").unwrap();
 
         let query = r"
@@ -148,26 +157,7 @@ mod tests {
     #[tokio::test]
     async fn issues_last() {
         let schema = TestSchema::new();
-        let issues = vec![
-            GitHubIssue {
-                number: 1,
-                title: "issue 1".to_string(),
-                author: "author 1".to_string(),
-                closed_at: None,
-            },
-            GitHubIssue {
-                number: 2,
-                title: "issue 2".to_string(),
-                author: "author 2".to_string(),
-                closed_at: None,
-            },
-            GitHubIssue {
-                number: 3,
-                title: "issue 3".to_string(),
-                author: "author 3".to_string(),
-                closed_at: None,
-            },
-        ];
+        let issues = create_issues(3);
         schema.db.insert_issues(issues, "owner", "name").unwrap();
 
         let query = r"
