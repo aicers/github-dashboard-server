@@ -78,21 +78,22 @@ impl IssueStatQuery {
 
 #[cfg(test)]
 mod tests {
-    use jiff::Timestamp;
-
-    use crate::{github::GitHubIssue, graphql::TestSchema};
+    use crate::{
+        github::GitHubIssue,
+        graphql::{DateTimeUtc, TestSchema},
+    };
 
     fn create_issues(n: usize) -> Vec<GitHubIssue> {
         (0..n)
             .map(|i| GitHubIssue {
-                number: i64::try_from(i).unwrap(),
+                number: i.try_into().unwrap(),
                 ..Default::default()
             })
             .collect()
     }
 
-    fn parse(date: &str) -> Timestamp {
-        date.parse().unwrap()
+    fn parse(date: &str) -> DateTimeUtc {
+        DateTimeUtc(date.parse().unwrap())
     }
 
     #[tokio::test]
