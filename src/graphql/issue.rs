@@ -39,13 +39,13 @@ impl TryFromKeyValue for Issue {
             ..
         } = bincode::deserialize::<GitHubIssue>(value)?;
         let issue = Issue {
-            title,
-            author,
             owner,
             repo,
-            number: i32::try_from(number).unwrap_or(i32::MAX),
             created_at: DateTimeUtc(created_at),
             state,
+            number,
+            title,
+            author,
             assignees,
         };
         Ok(issue)
