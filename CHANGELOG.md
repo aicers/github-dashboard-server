@@ -15,6 +15,9 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   `assignee`, `author`, `repo`(repository name), `begin` and `end` (creation
   date range). The query returns the `openIssueCount` field, indicating the
   number of open issues.
+- Added additional fields to the `issues` GraphQL query, providing detailed information
+  such as comments, labels, related sub-issues, linked pull requests, issue descriptions,
+  timestamps, and project-related metadata.
 
 ### Changed
 

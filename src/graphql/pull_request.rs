@@ -25,12 +25,12 @@ impl TryFromKeyValue for PullRequest {
         let deserialized = bincode::deserialize::<(String, Vec<String>, Vec<String>)>(value)?;
         let (title, assignees, reviewers) = deserialized;
         let pr = PullRequest {
+            owner,
+            repo,
+            number,
             title,
             assignees,
             reviewers,
-            owner,
-            repo,
-            number: i32::try_from(number).unwrap_or(i32::MAX),
         };
         Ok(pr)
     }

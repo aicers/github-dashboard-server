@@ -85,7 +85,7 @@ mod tests {
     fn create_issues(n: usize) -> Vec<GitHubIssue> {
         (0..n)
             .map(|i| GitHubIssue {
-                number: i64::try_from(i).unwrap(),
+                number: i.try_into().unwrap(),
                 ..Default::default()
             })
             .collect()
