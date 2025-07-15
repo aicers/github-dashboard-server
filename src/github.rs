@@ -60,6 +60,26 @@ impl Default for IssueState {
     }
 }
 
+impl PartialEq for IssueState {
+    fn eq(&self, other: &Self) -> bool {
+        use IssueState::{Other, CLOSED, OPEN};
+        matches!(
+            (self, other),
+            (OPEN, OPEN) | (CLOSED, CLOSED) | (Other(_), Other(_))
+        )
+    }
+}
+
+impl PartialEq for PullRequestState {
+    fn eq(&self, other: &Self) -> bool {
+        use PullRequestState::{Other, CLOSED, MERGED, OPEN};
+        matches!(
+            (self, other),
+            (OPEN, OPEN) | (MERGED, MERGED) | (CLOSED, CLOSED) | (Other(_), Other(_))
+        )
+    }
+}
+
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub(super) struct GitHubIssue {
     pub(super) id: String,

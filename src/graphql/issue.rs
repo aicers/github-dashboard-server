@@ -19,7 +19,7 @@ use crate::{
 scalar!(IssueState);
 scalar!(PullRequestState);
 
-#[derive(SimpleObject)]
+#[derive(SimpleObject, Clone)]
 pub(crate) struct Issue {
     pub(crate) id: String,
     pub(crate) owner: String,
@@ -42,13 +42,13 @@ pub(crate) struct Issue {
     pub(crate) closed_at: Option<DateTimeUtc>,
 }
 
-#[derive(SimpleObject, Debug, Default)]
+#[derive(SimpleObject, Debug, Default, Clone)]
 pub(crate) struct CommentConnection {
     pub(crate) total_count: i32,
     pub(crate) nodes: Vec<Comment>,
 }
 
-#[derive(SimpleObject, Debug)]
+#[derive(SimpleObject, Debug, Clone)]
 pub(crate) struct Comment {
     pub(crate) id: String,
     pub(crate) author: String,
@@ -59,13 +59,13 @@ pub(crate) struct Comment {
     pub(crate) url: String,
 }
 
-#[derive(SimpleObject, Debug, Default)]
+#[derive(SimpleObject, Debug, Default, Clone)]
 pub(crate) struct ProjectV2ItemConnection {
     pub(crate) total_count: i32,
     pub(crate) nodes: Vec<ProjectV2Item>,
 }
 
-#[derive(SimpleObject, Debug)]
+#[derive(SimpleObject, Debug, Clone)]
 pub(crate) struct ProjectV2Item {
     pub(crate) id: String,
     pub(crate) todo_status: Option<String>,
@@ -75,13 +75,13 @@ pub(crate) struct ProjectV2Item {
     pub(crate) todo_pending_days: Option<f64>,
 }
 
-#[derive(SimpleObject, Debug, Default)]
+#[derive(SimpleObject, Debug, Default, Clone)]
 pub(crate) struct SubIssueConnection {
     pub(crate) total_count: i32,
     pub(crate) nodes: Vec<SubIssue>,
 }
 
-#[derive(SimpleObject, Debug)]
+#[derive(SimpleObject, Debug, Clone)]
 pub(crate) struct SubIssue {
     pub(crate) id: String,
     pub(crate) number: i32,
@@ -94,14 +94,14 @@ pub(crate) struct SubIssue {
     pub(crate) closed_at: Option<DateTimeUtc>,
 }
 
-#[derive(SimpleObject, Serialize, Deserialize, Debug)]
+#[derive(SimpleObject, Serialize, Deserialize, Debug, Clone)]
 pub(crate) struct ParentIssue {
     pub(crate) id: String,
     pub(crate) number: i32,
     pub(crate) title: String,
 }
 
-#[derive(SimpleObject, Debug)]
+#[derive(SimpleObject, Debug, Clone)]
 pub(crate) struct PullRequestRef {
     pub(crate) number: i32,
     pub(crate) state: PullRequestState,
