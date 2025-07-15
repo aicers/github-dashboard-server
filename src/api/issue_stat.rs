@@ -54,6 +54,9 @@ pub(super) struct IssueStatQuery {}
 struct IssueStat {
     /// The number of open issues.
     open_issue_count: i32,
+
+    /// The number of resolved issues.
+    resolved_issue_count: i32,
 }
 
 #[Object]
@@ -69,7 +72,19 @@ impl IssueStatQuery {
             .count()
             .try_into()?;
 
-        Ok(IssueStat { open_issue_count })
+        let resolved_issues: Vec<_> = filtered
+            .iter()
+            .filter(|issue| issue.is_resolved())
+            .collect();
+        let resolved_issue_count = resolved_issues
+            .len()
+            .try_into()
+            .expect("The number of resolved issues will not exceed i32::MAX");
+
+        Ok(IssueStat {
+            open_issue_count,
+            resolved_issue_count,
+        })
     }
 }
 
@@ -77,12 +92,46 @@ impl IssueStatQuery {
 mod tests {
     use jiff::Timestamp;
 
-    use crate::{api::TestSchema, database::GitHubIssue};
+    use crate::{
+        api::issue::{TODO_LIST_PROJECT_TITLE, TODO_LIST_STATUS_DONE},
+        api::TestSchema,
+        database::issue::{GitHubIssue, GitHubProjectV2Item, GitHubProjectV2ItemConnection},
+        outbound::issues::IssueState,
+    };
 
     fn create_issues(n: usize) -> Vec<GitHubIssue> {
         (1..=n)
             .map(|i| GitHubIssue {
                 number: i.try_into().unwrap(),
+                ..Default::default()
+            })
+            .collect()
+    }
+
+    fn create_resolved_issues<R>(range: R) -> Vec<GitHubIssue>
+    where
+        R: Iterator<Item = usize>,
+    {
+        range
+            .map(|i| GitHubIssue {
+                number: i.try_into().unwrap(),
+                state: IssueState::CLOSED,
+                project_items: GitHubProjectV2ItemConnection {
+                    total_count: 1,
+                    nodes: vec![GitHubProjectV2Item {
+                        // Essential Values to be determined as a resolved issue
+                        project_title: TODO_LIST_PROJECT_TITLE.to_string(),
+                        todo_status: Some(TODO_LIST_STATUS_DONE.to_string()),
+
+                        // these fields are not used for this tests
+                        project_id: "Not Used".to_string(),
+                        id: "Not Used".to_string(),
+                        todo_priority: None,
+                        todo_size: None,
+                        todo_initiation_option: None,
+                        todo_pending_days: None,
+                    }],
+                },
                 ..Default::default()
             })
             .collect()
@@ -237,5 +286,215 @@ mod tests {
         }"#;
         let data = schema.execute(query).await.data.into_json().unwrap();
         assert_eq!(data["issueStat"]["openIssueCount"], 2);
+    }
+
+    #[tokio::test]
+    async fn resolved_issue_count() {
+        let schema = TestSchema::new();
+        let owner: &str = "aicers";
+        let repo = "github-dashboard-server";
+
+        schema
+            .db
+            .insert_issues(create_issues(3), owner, repo)
+            .unwrap();
+        schema
+            .db
+            .insert_issues(create_resolved_issues(4..=8), owner, repo)
+            .unwrap();
+
+        let query = "
+        {
+            issueStat(filter: {}) {
+                resolvedIssueCount
+            }
+        }";
+        let data = schema.execute(query).await.data.into_json().unwrap();
+        assert_eq!(data["issueStat"]["resolvedIssueCount"], 5);
+    }
+
+    #[tokio::test]
+    async fn resolved_issue_count_by_assignee() {
+        let schema = TestSchema::new();
+        let owner: &str = "aicers";
+        let repo = "github-dashboard-server";
+        let mut issues = create_issues(3);
+        let mut resolved_issues = create_resolved_issues(4..=8);
+        issues[0].assignees = vec!["alice".to_string(), "bob".to_string()];
+        issues[1].assignees = vec!["alice".to_string()];
+        resolved_issues[0].assignees = vec!["alice".to_string(), "bob".to_string()];
+        resolved_issues[1].assignees = vec!["alice".to_string()];
+
+        schema.db.insert_issues(issues, owner, repo).unwrap();
+        schema
+            .db
+            .insert_issues(resolved_issues, owner, repo)
+            .unwrap();
+
+        let query = r#"
+        {
+            issueStat(filter: {assignee: "alice"}) {
+                resolvedIssueCount
+            }
+        }"#;
+        let data = schema.execute(query).await.data.into_json().unwrap();
+        assert_eq!(data["issueStat"]["resolvedIssueCount"], 2);
+    }
+
+    #[tokio::test]
+    async fn resolved_issue_count_by_author() {
+        let schema = TestSchema::new();
+        let owner: &str = "aicers";
+        let repo = "github-dashboard-server";
+        let mut issues = create_issues(3);
+        let mut resolved_issues = create_resolved_issues(4..=8);
+        issues[0].author = "alice".to_string();
+        resolved_issues[0].author = "alice".to_string();
+
+        schema.db.insert_issues(issues, owner, repo).unwrap();
+        schema
+            .db
+            .insert_issues(resolved_issues, owner, repo)
+            .unwrap();
+
+        let query = r#"
+        {
+            issueStat(filter: {author: "alice"}) {
+                resolvedIssueCount
+            }
+        }"#;
+        let data = schema.execute(query).await.data.into_json().unwrap();
+        assert_eq!(data["issueStat"]["resolvedIssueCount"], 1);
+    }
+
+    #[tokio::test]
+    async fn resolved_issue_count_by_repo() {
+        let schema = TestSchema::new();
+        let owner: &str = "aicers";
+        schema
+            .db
+            .insert_issues(create_issues(3), owner, "github-dashboard-server")
+            .unwrap();
+        schema
+            .db
+            .insert_issues(
+                create_resolved_issues(4..=8),
+                owner,
+                "github-dashboard-server",
+            )
+            .unwrap();
+        schema
+            .db
+            .insert_issues(create_issues(3), owner, "github-dashboard-client")
+            .unwrap();
+        schema
+            .db
+            .insert_issues(
+                create_resolved_issues(4..=8),
+                owner,
+                "github-dashboard-client",
+            )
+            .unwrap();
+
+        let query = r#"
+        {
+            issueStat(filter: {repo: "github-dashboard-server"}) {
+                resolvedIssueCount
+            }
+        }"#;
+        let data = schema.execute(query).await.data.into_json().unwrap();
+        assert_eq!(data["issueStat"]["resolvedIssueCount"], 5);
+    }
+
+    // NOTE: `begin` field is inclusive (c.f. `end` field is exclusive)
+    #[tokio::test]
+    async fn resolved_issue_count_by_begin() {
+        let schema = TestSchema::new();
+        let owner: &str = "aicers";
+        let repo = "github-dashboard-server";
+        let mut issues = create_issues(3);
+        let mut resolved_issues = create_resolved_issues(4..=8);
+        issues[0].created_at = parse("2025-01-05T00:00:00Z");
+        issues[1].created_at = parse("2025-01-06T00:00:00Z");
+        resolved_issues[0].created_at = parse("2025-01-05T00:00:00Z");
+        resolved_issues[1].created_at = parse("2025-01-06T00:00:00Z");
+
+        schema.db.insert_issues(issues, owner, repo).unwrap();
+        schema
+            .db
+            .insert_issues(resolved_issues, owner, repo)
+            .unwrap();
+
+        let query = r#"
+        {
+            issueStat(filter: {begin: "2025-01-05T00:00:00Z"}) {
+                resolvedIssueCount
+            }
+        }"#;
+        let data = schema.execute(query).await.data.into_json().unwrap();
+        assert_eq!(data["issueStat"]["resolvedIssueCount"], 2);
+    }
+
+    // NOTE: `end` field is exclusive (c.f. `begin` field is inclusive)
+    #[tokio::test]
+    async fn resolved_issue_count_by_end() {
+        let schema = TestSchema::new();
+        let owner: &str = "aicers";
+        let repo = "github-dashboard-server";
+        let mut issues = create_issues(3);
+        let mut resolved_issues = create_resolved_issues(4..=8);
+        issues[0].created_at = parse("2025-01-05T00:00:00Z");
+        issues[1].created_at = parse("2025-01-06T00:00:00Z");
+        resolved_issues[0].created_at = parse("2025-01-05T00:00:00Z");
+        resolved_issues[1].created_at = parse("2025-01-06T00:00:00Z");
+        resolved_issues[2].created_at = parse("2025-01-07T00:00:00Z");
+        resolved_issues[3].created_at = parse("2025-01-08T00:00:00Z");
+        resolved_issues[4].created_at = parse("2025-01-09T00:00:00Z");
+
+        schema.db.insert_issues(issues, owner, repo).unwrap();
+        schema
+            .db
+            .insert_issues(resolved_issues, owner, repo)
+            .unwrap();
+
+        let query = r#"
+        {
+            issueStat(filter: {end: "2025-01-07T00:00:00Z"}) {
+                resolvedIssueCount
+            }
+        }"#;
+        let data = schema.execute(query).await.data.into_json().unwrap();
+        assert_eq!(data["issueStat"]["resolvedIssueCount"], 2);
+    }
+
+    #[tokio::test]
+    async fn resolved_issue_count_by_begin_and_end() {
+        let schema = TestSchema::new();
+        let owner: &str = "aicers";
+        let repo = "github-dashboard-server";
+        let mut issues = create_issues(3);
+        let mut resolved_issues = create_resolved_issues(4..=8);
+        issues[0].created_at = parse("2025-01-05T00:00:00Z");
+        issues[1].created_at = parse("2025-01-06T00:00:00Z");
+        resolved_issues[0].created_at = parse("2025-01-05T00:00:00Z");
+        resolved_issues[1].created_at = parse("2025-01-06T00:00:00Z");
+        resolved_issues[2].created_at = parse("2025-01-07T00:00:00Z");
+        resolved_issues[3].created_at = parse("2025-01-08T00:00:00Z");
+        resolved_issues[4].created_at = parse("2025-01-09T00:00:00Z");
+
+        schema.db.insert_issues(issues, owner, repo).unwrap();
+        schema
+            .db
+            .insert_issues(resolved_issues, owner, repo)
+            .unwrap();
+
+        let query = r#"
+        {
+            issueStat(filter: {begin: "2025-01-06T00:00:00Z", end: "2025-01-07T00:00:00Z"}) {
+                resolvedIssueCount
+            }
+        }"#;
+        let data = schema.execute(query).await.data.into_json().unwrap();
+        assert_eq!(data["issueStat"]["resolvedIssueCount"], 1);
     }
 }

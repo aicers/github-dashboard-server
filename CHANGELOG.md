@@ -8,6 +8,10 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- Added new statistics to GraphQL API `issueStat` query. A field
+  `resolvedIssueCount` is added, indicating the number of resolved issues.
+  Currently, an issue is defined to be resolved if and only if (1) it is
+  "Closed" and (2) status of project item "to-do list" is "Done".
 - Tracing with a filter set by `RUST_LOG` environment variable.
 - Added support for passing the SSH passphrase through the `SSH_PASSPHRASE`
   environment variable.

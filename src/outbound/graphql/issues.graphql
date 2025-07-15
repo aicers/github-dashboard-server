@@ -71,6 +71,10 @@ query Issues(
           totalCount
           nodes {
             __typename
+            project {
+              id
+              title
+            }
             id
             todoStatus: fieldValueByName(name: "Status") {
               __typename

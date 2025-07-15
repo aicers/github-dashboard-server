@@ -9,7 +9,6 @@ use tokio::time;
 use tracing::error;
 
 pub use self::pull_requests::{PullRequestReviewState, PullRequestState as PRPullRequestState};
-use crate::database::issue::GitHubProjectV2Item;
 use crate::database::DiscussionDbSchema;
 use crate::{
     database::{issue::GitHubIssue, Database},
@@ -80,12 +79,6 @@ pub(crate) struct GitHubPRComment {
 pub(crate) struct GitHubPRCommentConnection {
     pub(crate) total_count: i32,
     pub(crate) nodes: Vec<GitHubPRComment>,
-}
-
-#[derive(Debug, Default, Deserialize, Serialize)]
-pub(crate) struct GitHubProjectV2ItemConnection {
-    pub(crate) total_count: i32,
-    pub(crate) nodes: Vec<GitHubProjectV2Item>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
