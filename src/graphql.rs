@@ -1,6 +1,9 @@
 pub(crate) mod issue;
 pub(crate) mod issue_stat;
 pub(crate) mod pull_request;
+pub(crate) mod resolved_issue;
+pub(crate) mod resolved_issue_stat;
+pub(crate) mod total_count_field;
 
 use std::fmt::Display;
 
@@ -24,13 +27,15 @@ const DEFAULT_PAGE_SIZE: usize = 100;
 #[derive(Default, MergedObject)]
 pub(crate) struct Query(
     issue::IssueQuery,
+    resolved_issue::ResolvedIssueQuery,
     pull_request::PullRequestQuery,
     issue_stat::IssueStatQuery,
+    resolved_issue_stat::ResolvedIssueStatQuery,
 );
 
 pub(crate) type Schema = async_graphql::Schema<Query, EmptyMutation, EmptySubscription>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct DateTimeUtc(Timestamp);
 
 #[Scalar]

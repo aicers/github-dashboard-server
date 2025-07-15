@@ -24,7 +24,7 @@ pub(crate) struct IssueStatFilter {
 }
 
 impl IssueStatFilter {
-    fn filter_issues(&self, issues: Iter<Issue>) -> Vec<Issue> {
+    pub(super) fn filter_issues(&self, issues: Iter<Issue>) -> Vec<Issue> {
         issues
             .into_iter()
             .filter_map(std::result::Result::ok)
