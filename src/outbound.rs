@@ -43,7 +43,7 @@ type URI = String;
 #[graphql(
     schema_path = "src/outbound/graphql/schema.graphql",
     query_path = "src/outbound/graphql/issues.graphql",
-    response_derives = "Debug, Clone"
+    response_derives = "Debug, Clone, PartialEq"
 )]
 pub(crate) struct Issues;
 
@@ -115,6 +115,8 @@ pub(crate) struct GitHubProjectV2ItemConnection {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub(crate) struct GitHubProjectV2Item {
+    pub(crate) project_id: String,
+    pub(crate) project_title: String,
     pub(crate) id: String,
     pub(crate) todo_status: Option<String>,
     pub(crate) todo_priority: Option<String>,
@@ -340,6 +342,8 @@ async fn send_github_issue_query(
                                 .into_iter()
                                 .flatten()
                                 .map(|node| GitHubProjectV2Item {
+                                    project_id: node.project.id,
+                                    project_title: node.project.title,
                                     id: node.id,
                                     todo_status: node.todo_status.and_then(|status| match status {
                                         TodoStatus::ProjectV2ItemFieldSingleSelectValue(inner) => {
