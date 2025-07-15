@@ -27,6 +27,7 @@ use crate::{
     },
     settings::Repository as RepoInfo,
 };
+use crate::database::DiscussionDbSchema;
 
 const GITHUB_FETCH_SIZE: i64 = 10;
 const GITHUB_URL: &str = "https://api.github.com/graphql";
@@ -52,6 +53,14 @@ pub(crate) struct Issues;
     query_path = "src/github/pull_requests.graphql"
 )]
 struct PullRequests;
+
+#[derive(GraphQLQuery)]
+#[graphql(
+    schema_path = "src/github/schema.graphql",
+    query_path = "src/github/discussions.graphql",
+    response_derives = "Debug"
+)]
+pub(crate) struct Discussions;
 
 #[allow(clippy::derivable_impls)]
 impl Default for IssueState {
@@ -216,6 +225,25 @@ pub(super) async fn fetch_periodically(
                     }
                     Err(error) => {
                         error!("Problem while sending github pr query. Query retransmission is done after 5 minutes. {}", error);
+                    }
+                }
+                itv.reset();
+            }
+
+            let mut re_itv = time::interval(retry);
+            loop {
+                re_itv.tick().await;
+                match send_github_discussion_query(&repoinfo.owner, &repoinfo.name, &token).await {
+                    Ok(resps) => {
+                        if let Err(error) =
+                            db.insert_discussions(resps, &repoinfo.owner, &repoinfo.name)
+                        {
+                            error!("Problem while insert Sled Database. {}", error);
+                        }
+                        break;
+                    }
+                    Err(error) => {
+                        error!("Problem while sending github discussion query. Query retransmission is done after 5 minutes. {}", error);
                     }
                 }
                 itv.reset();
@@ -498,6 +526,51 @@ async fn send_github_pr_query(
         bail!("Failed to parse response data");
     }
     Ok(total_prs)
+}
+
+async fn send_github_discussion_query(
+    owner: &str,
+    name: &str,
+    token: &str,
+) -> Result<Vec<DiscussionDbSchema>> {
+    let mut end_cur: Option<String> = None;
+    let mut discussions = Vec::new();
+    loop {
+        let var = discussions::Variables {
+            owner: owner.to_string(),
+            name: name.to_string(),
+            first: Some(GITHUB_FETCH_SIZE),
+            last: None,
+            before: None,
+            after: end_cur,
+        };
+
+        let resp_body: GraphQlResponse<discussions::ResponseData> =
+            send_query::<Discussions>(token, var).await?.json().await?;
+        if let Some(data) = resp_body.data {
+            if let Some(repository) = data.repository {
+                if let Some(nodes) = repository.discussions.nodes {
+                    let mut temp_discussions: Vec<DiscussionDbSchema> = nodes
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|n| DiscussionDbSchema::try_from(n).ok())
+                        .collect();
+
+                    discussions.append(&mut temp_discussions);
+
+                    if !repository.discussions.page_info.has_next_page {
+                        break;
+                    }
+                    end_cur = repository.discussions.page_info.end_cursor;
+                    continue;
+                }
+                end_cur = repository.discussions.page_info.end_cursor;
+                continue;
+            }
+        }
+        bail!("Failed to parse response data");
+    }
+    Ok(discussions)
 }
 
 fn request<V>(request_body: &QueryBody<V>, token: &str) -> Result<RequestBuilder>
