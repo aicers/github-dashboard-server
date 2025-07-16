@@ -18,7 +18,7 @@ use crate::{
 #[derive(SimpleObject)]
 pub(crate) struct ResolvedIssue {
     #[graphql(flatten)]
-    issue: Issue,
+    pub(crate) issue: Issue,
 }
 
 impl Issue {
