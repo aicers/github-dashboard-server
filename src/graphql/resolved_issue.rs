@@ -6,7 +6,6 @@ use async_graphql::{
     Context, Object, SimpleObject,
 };
 use base64::{engine::general_purpose, Engine as _};
-use regex::Regex;
 
 use crate::{
     database::{Database, TryFromKeyValue},
@@ -37,22 +36,6 @@ impl Issue {
         {
             // If the issue has closing PR, we can conclude that the issue is resolved
             return true;
-        } else if let Some(last_comment) = self.comments.nodes.last() {
-            // If the issue was closed manually, we should check commit message.
-            // If commit message has words like "Fix/Close/Resolve" and "#N",
-            // we can check PR #N is merged.
-            // (ex) Resolved in #3.
-            let re = Regex::new(r"^(Fix|Close|Resolve).*#(?P<number>\d+).*$").unwrap();
-
-            if let Some(cap) = re.captures(&last_comment.body) {
-                if let Some(pr_number_match) = cap.name("number") {
-                    if let Ok(pr_number) = pr_number_match.as_str().parse::<i32>() {
-                        println!("pr_number: {pr_number}");
-                        // todo!("Check PR #N is merged");
-                        return true;
-                    }
-                }
-            }
         }
 
         false
@@ -250,7 +233,7 @@ mod tests {
         let issue1 = issue1();
         let issue4 = issue4();
 
-        assert!(issue1.is_resolved());
+        assert!(!issue1.is_resolved());
         assert!(issue4.is_resolved());
     }
 
@@ -259,7 +242,7 @@ mod tests {
         let issue1 = issue1();
         let issue4 = issue4();
 
-        assert!(<ResolvedIssue>::try_from(issue1).is_ok());
+        assert!(<ResolvedIssue>::try_from(issue1).is_err());
         assert!(<ResolvedIssue>::try_from(issue4).is_ok());
     }
 
@@ -268,7 +251,7 @@ mod tests {
         let issue1_ref = &issue1();
         let issue4_ref = &issue4();
 
-        assert!(<ResolvedIssue>::try_from(issue1_ref).is_ok());
+        assert!(<ResolvedIssue>::try_from(issue1_ref).is_err());
         assert!(<ResolvedIssue>::try_from(issue4_ref).is_ok());
     }
 }
