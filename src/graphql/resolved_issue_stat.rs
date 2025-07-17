@@ -23,7 +23,7 @@ impl ResolvedIssueStatQuery {
         ctx: &Context<'_>,
         filter: IssueStatFilter,
     ) -> async_graphql::Result<ResolvedIssueStat> {
-        let mut resolved_issues = ResolvedIssue::load(ctx, &filter);
+        let mut resolved_issues = ResolvedIssue::load(ctx, None, None, &filter)?;
         let total_count = resolved_issues.len();
 
         // *latest*: The latest created issue (= highest issue number)

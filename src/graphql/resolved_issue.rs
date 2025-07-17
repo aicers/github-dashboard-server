@@ -10,9 +10,10 @@ use base64::{engine::general_purpose, Engine as _};
 use crate::{
     database::{Database, TryFromKeyValue},
     github::issues::{IssueState, PullRequestState},
-    graphql::issue::Issue,
-    graphql::issue_stat::IssueStatFilter,
-    graphql::total_count_field::TotalCountField,
+    graphql::{
+        issue::Issue, issue_stat::IssueStatFilter, total_count_field::TotalCountField,
+        DEFAULT_PAGE_SIZE,
+    },
 };
 
 #[derive(SimpleObject)]
@@ -43,19 +44,40 @@ impl Issue {
 }
 
 impl ResolvedIssue {
-    pub(super) fn load(ctx: &Context<'_>, filter: &IssueStatFilter) -> Vec<ResolvedIssue> {
+    pub(super) fn load(
+        ctx: &Context<'_>,
+        after: Option<String>,
+        before: Option<String>,
+        filter: &IssueStatFilter,
+    ) -> anyhow::Result<Vec<ResolvedIssue>> {
         // Load all issues which meet filter condition
         if let Ok(db) = ctx.data::<Database>() {
-            let issues = db.issues(None, None);
+            // If invalid *after* value is given, it will be ignored
+            let start_cursor = if let Some(after) = after {
+                general_purpose::STANDARD.decode(&after).ok()
+            } else {
+                None
+            };
+            let start_cursor_slice = start_cursor.as_ref().map(|item| item.as_slice());
+
+            // If invalid *before* value is given, it will be ignored
+            let end_cursor = if let Some(before) = before {
+                general_purpose::STANDARD.decode(before).ok()
+            } else {
+                None
+            };
+            let end_cursor_slice = end_cursor.as_ref().map(|item| item.as_slice());
+
+            let issues = db.issues(start_cursor_slice, end_cursor_slice);
             let filtered = filter.filter_issues(issues);
 
             // Select resolved issues among issues
-            filtered
+            Ok(filtered
                 .iter()
                 .filter_map(|issue| ResolvedIssue::try_from(issue).ok())
-                .collect()
+                .collect())
         } else {
-            vec![]
+            Err(anyhow!("Failed to connect to DB."))
         }
     }
 }
@@ -104,14 +126,52 @@ impl ResolvedIssueQuery {
     async fn resolved_issues(
         &self,
         ctx: &Context<'_>,
+        after: Option<String>,
+        before: Option<String>,
+        first: Option<usize>,
+        last: Option<usize>,
         filter: IssueStatFilter,
     ) -> async_graphql::Result<Connection<String, ResolvedIssue, TotalCountField>> {
-        let resolved_issues = ResolvedIssue::load(ctx, &filter);
-        let total_count = resolved_issues.len();
+        // Validate arguments
+        if first.is_some() && last.is_some() {
+            return Err(async_graphql::Error {
+                message: "*first* and *last* are exclusive. You can use either one of them."
+                    .to_string(),
+                source: None,
+                extensions: None,
+            });
+        }
+
+        let resolved_issues = ResolvedIssue::load(ctx, after, before, &filter)?;
+
+        let (page_size, page_is_forward) = if let Some(first) = first {
+            (first.min(DEFAULT_PAGE_SIZE), true)
+        } else if let Some(last) = last {
+            (last.min(DEFAULT_PAGE_SIZE), false)
+        } else {
+            (DEFAULT_PAGE_SIZE, true)
+        };
+
+        let paged_result = if resolved_issues.len() > page_size {
+            if page_is_forward {
+                resolved_issues.into_iter().take(page_size).collect()
+            } else {
+                resolved_issues
+                    .into_iter()
+                    .rev()
+                    .take(page_size)
+                    .rev()
+                    .collect()
+            }
+        } else {
+            resolved_issues
+        };
+
+        let total_count = paged_result.len();
         let mut connection =
             Connection::with_additional_fields(false, false, TotalCountField { total_count });
 
-        for node in resolved_issues {
+        for node in paged_result {
             connection.edges.push(Edge::new(
                 general_purpose::STANDARD.encode(format!("{node}")),
                 node,
