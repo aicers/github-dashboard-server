@@ -135,7 +135,7 @@ impl TryFromKeyValue for Issue {
                     .nodes
                     .into_iter()
                     .map(|comment| Comment {
-                        id: comment.id,
+                        id: comment.id.unwrap_or_default(),
                         author: comment.author,
                         body: comment.body,
                         repository_name: comment.repository_name,

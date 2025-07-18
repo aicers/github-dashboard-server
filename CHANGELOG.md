@@ -20,6 +20,8 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   timestamps, and project-related metadata.
 - Exposed a new `discussions` query in the server’s GraphQL API to query the
   stored discussion data.
+- Added new fields to the `PullRequests` GraphQL query and corresponding fields to
+  the `graphql::pull_request::PullRequest` struct.
 
 ### Changed
 

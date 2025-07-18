@@ -49,7 +49,6 @@ impl ScalarType for DateTimeUtc {
         Value::String(self.0.to_string())
     }
 }
-
 fn connect_cursor<T>(
     select_vec: Vec<T>,
     prev: bool,

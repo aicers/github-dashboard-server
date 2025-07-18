@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1"
-async-graphql = "7"
+async-graphql = { version = "7" }
 async-graphql-warp = "7"
 base64 = "0.22"
 bincode = "1"
