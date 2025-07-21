@@ -58,6 +58,7 @@ async fn main() -> Result<()> {
         // "Are there any spikes in activity (issues, PRs, discussions) that correlate with external events (e.g., release cycles)?",
         // "Identify contributors who initiated a discussion and later implemented the solution via a PR.",
         "Are there contributors whose activity patterns suggest they work on this repo during specific times of day or week?",
+        "What is the issue number for 'CI setup using GitHub Actions'?",
     ];
 
     for query in queries {
