@@ -1,31 +1,38 @@
 use async_trait::async_trait;
-use graph_flow::{Context, NextAction, Task, TaskResult};
-use rig_core::{agent::Agent, providers::openai};
+use graph_flow::{Context, GraphError, NextAction, Task, TaskResult};
+use rig::{
+    agent::Agent,
+    client::CompletionClient,
+    completion::Chat,
+    providers::{self},
+};
 
-use crate::session_keys;
-use crate::types::query::EnhancedQuery;
-use crate::types::response::VectorSearchResult;
+use crate::lang_graph::{
+    session_keys,
+    types::{query::EnhancedQuery, response::VectorSearchResult},
+    utils::pretty_log,
+};
 
 pub struct ContextRerankingTask {
-    agent: Agent,
+    agent: Agent<providers::ollama::CompletionModel>,
 }
 
 impl ContextRerankingTask {
     pub fn new() -> Self {
-        let client = openai::Client::from_env();
+        let client = providers::ollama::Client::new();
         let agent = client
-            .agent("gpt-4")
+            .agent("llama3.1:8b")
             .preamble(
-                r#"You are a context reranking specialist. Given a user query and a list of search results, rerank them by relevance.
+                r"You are a context reranking specialist. Given a user query and a list of search results, rerank them by relevance.
 
-Consider:
-1. Direct relevance to the query
-2. Content quality and completeness
-3. Recency (newer content may be more relevant)
-4. Authority (official documentation, maintainer comments)
+                Consider:
+                1. Direct relevance to the query
+                2. Content quality and completeness
+                3. Recency (newer content may be more relevant)
+                4. Authority (official documentation, maintainer comments)
 
-Return the results in order of relevance with scores from 0.0 to 1.0.
-Format: JSON array with objects containing 'id' and 'relevance_score' fields."#
+                Return the results in order of relevance with scores from 0.0 to 1.0.
+                Format: JSON array with objects containing 'id' and 'relevance_score' fields."
             )
             .build();
 
@@ -54,8 +61,9 @@ impl Task for ContextRerankingTask {
         }
 
         let enhanced_query: EnhancedQuery = context
-            .get_sync(session_keys::ENHANCED_QUERY)
-            .ok_or_else(|| graph_flow::Error::custom("No enhanced query found"))?;
+            .get::<EnhancedQuery>(session_keys::ENHANCED_QUERY)
+            .await
+            .ok_or_else(|| GraphError::ContextError("No enhanced query found".to_string()))?;
 
         let chat_history = context.get_rig_messages().await;
 
@@ -74,7 +82,7 @@ impl Task for ContextRerankingTask {
 
         let prompt = format!(
             "Rerank these search results for the query: '{}'\n\nResults:\n{}\n\nReturn reranked results with relevance scores.",
-            enhanced_query.enhanced,
+            enhanced_query.original,
             serde_json::to_string_pretty(&results_summary).unwrap()
         );
 
@@ -82,7 +90,7 @@ impl Task for ContextRerankingTask {
             .agent
             .chat(&prompt, chat_history)
             .await
-            .map_err(|e| graph_flow::Error::custom(format!("LLM error: {}", e)))?;
+            .map_err(|e| GraphError::TaskExecutionFailed(format!("LLM error: {e}")))?;
 
         // 재순위 결과 파싱
         let rerank_scores: Vec<serde_json::Value> =
@@ -132,12 +140,17 @@ impl Task for ContextRerankingTask {
             ))
             .await;
 
+        pretty_log(
+            "ContextReranking finished. Results:",
+            &serde_json::to_string(&reranked_results).unwrap_or_default(),
+        );
+
         Ok(TaskResult::new(
             Some(format!(
                 "Context reranking completed, selected top {} results",
                 reranked_results.len()
             )),
-            NextAction::Continue,
+            NextAction::End,
         ))
     }
 }
