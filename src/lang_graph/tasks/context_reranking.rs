@@ -150,7 +150,7 @@ impl Task for ContextRerankingTask {
                 "Context reranking completed, selected top {} results",
                 reranked_results.len()
             )),
-            NextAction::End,
+            NextAction::Continue,
         ))
     }
 }
