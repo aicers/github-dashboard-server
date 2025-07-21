@@ -5,9 +5,9 @@
 // pub(crate) mod response_formatter;
 
 // pub(crate) mod statistics_response;
-// pub(crate) mod vector_search;
 
 pub(crate) mod query_enhancement;
 pub(crate) mod segment_parser;
+pub(crate) mod vector_search;
 
 use super::utils::*;

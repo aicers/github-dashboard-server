@@ -117,7 +117,7 @@ impl Task for QueryEnhancementTask {
                 "Query enhanced. Segments: {:?}",
                 segments.iter().map(|s| &s.query_type).collect::<Vec<_>>()
             )),
-            NextAction::End,
+            NextAction::Continue,
         ))
     }
 }
