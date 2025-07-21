@@ -115,7 +115,7 @@ impl Task for VectorSearchTask {
                 "Vector search completed with {} results",
                 vector_results.len()
             )),
-            NextAction::End, // or NextAction::Continue if you want to keep the flow going
+            NextAction::Continue, // or NextAction::Continue if you want to keep the flow going
         ))
     }
 }
