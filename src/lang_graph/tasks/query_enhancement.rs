@@ -22,7 +22,6 @@ pub struct QueryEnhancementTask {
 
 impl QueryEnhancementTask {
     pub fn new() -> Self {
-        // OpenAI 클라이언트 설정 (실제로는 환경변수에서 API 키 가져오기)
         let client = providers::ollama::Client::new();
         let agent = client
             .agent("llama3.1:8b")
