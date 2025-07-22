@@ -6,13 +6,12 @@ use regex::Regex;
 use serde::Serialize;
 
 pub mod discussion;
+pub mod issue;
 
 pub(crate) use discussion::DiscussionDbSchema;
+pub(crate) use issue::GitHubIssue;
 
-use crate::{
-    api::{issue::Issue, pull_request::PullRequest},
-    outbound::{GitHubIssue, GitHubPullRequestNode},
-};
+use crate::{api::pull_request::PullRequest, outbound::GitHubPullRequestNode};
 
 const GLOBAL_PARTITION_NAME: &str = "global";
 const ISSUE_PARTITION_NAME: &str = "issues";
@@ -86,19 +85,6 @@ impl Database {
         bail!("Failed to get db value");
     }
 
-    pub(crate) fn insert_issues(
-        &self,
-        resp: Vec<GitHubIssue>,
-        owner: &str,
-        name: &str,
-    ) -> Result<()> {
-        for item in resp {
-            let keystr: String = format!("{owner}/{name}#{}", item.number);
-            Database::insert(&keystr, item, &self.issue_partition)?;
-        }
-        Ok(())
-    }
-
     pub(crate) fn insert_pull_requests(
         &self,
         resp: Vec<GitHubPullRequestNode>,
@@ -110,15 +96,6 @@ impl Database {
             Database::insert(&keystr, item, &self.pull_request_partition)?;
         }
         Ok(())
-    }
-
-    pub(crate) fn issues(&self, start: Option<&[u8]>, end: Option<&[u8]>) -> Iter<Issue> {
-        let start = start.unwrap_or(b"\x00");
-        if let Some(end) = end {
-            Iter::new(self.issue_partition.range(start..end))
-        } else {
-            Iter::new(self.issue_partition.range(start..))
-        }
     }
 
     pub(crate) fn pull_requests(

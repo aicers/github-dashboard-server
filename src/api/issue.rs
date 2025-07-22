@@ -10,11 +10,8 @@ use serde::{Deserialize, Serialize};
 use crate::{
     api,
     api::DateTimeUtc,
-    database::{self, Database, TryFromKeyValue},
-    outbound::{
-        issues::{IssueState, PullRequestState},
-        GitHubIssue,
-    },
+    database::{self, Database, GitHubIssue, TryFromKeyValue},
+    outbound::issues::{IssueState, PullRequestState},
 };
 
 scalar!(IssueState);
@@ -241,7 +238,7 @@ impl IssueQuery {
 
 #[cfg(test)]
 mod tests {
-    use crate::{api::TestSchema, outbound::GitHubIssue};
+    use crate::{api::TestSchema, database::GitHubIssue};
 
     fn create_issues(n: usize) -> Vec<GitHubIssue> {
         (1..=n)

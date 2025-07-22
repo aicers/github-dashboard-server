@@ -77,10 +77,10 @@ impl IssueStatQuery {
 mod tests {
     use jiff::Timestamp;
 
-    use crate::{api::TestSchema, outbound::GitHubIssue};
+    use crate::{api::TestSchema, database::GitHubIssue};
 
     fn create_issues(n: usize) -> Vec<GitHubIssue> {
-        (0..n)
+        (1..=n)
             .map(|i| GitHubIssue {
                 number: i.try_into().unwrap(),
                 ..Default::default()
