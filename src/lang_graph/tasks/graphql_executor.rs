@@ -1,9 +1,8 @@
 use async_trait::async_trait;
 use graph_flow::{Context, NextAction, Task, TaskResult};
+use tracing::info;
 
-use crate::session_keys;
-use crate::types::query::QueryType;
-
+use crate::lang_graph::session_keys;
 pub struct GraphQLExecutorTask;
 
 impl GraphQLExecutorTask {
@@ -15,23 +14,21 @@ impl GraphQLExecutorTask {
 #[async_trait]
 impl Task for GraphQLExecutorTask {
     async fn run(&self, context: Context) -> graph_flow::Result<TaskResult> {
-        let query_type: QueryType = context
-            .get_sync(session_keys::QUERY_TYPE)
-            .ok_or_else(|| graph_flow::Error::custom("No query type found"))?;
+        let session_id = context
+            .get::<String>("session_id")
+            .await
+            .unwrap_or_else(|| "unknown".to_string());
 
-        // 정량적 쿼리가 아니면 스킵
-        if !matches!(query_type, QueryType::Quantitative) {
-            return Ok(TaskResult::new(
-                Some("Skipping GraphQL execution for qualitative query".to_string()),
-                NextAction::Continue,
-            ));
-        }
+        info!("GraphQLExecutorTask started. Session: {}", session_id);
 
         let graphql_query: String = context
             .get_sync(session_keys::GRAPHQL_QUERY)
             .unwrap_or_default();
 
         if graphql_query.is_empty() {
+            context
+                .set(session_keys::GRAPHQL_RESULT, serde_json::Value::Null)
+                .await;
             return Ok(TaskResult::new(
                 Some("No GraphQL query to execute".to_string()),
                 NextAction::Continue,

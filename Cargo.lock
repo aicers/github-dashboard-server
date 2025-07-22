@@ -1097,7 +1097,7 @@ dependencies = [
  "qdrant-client",
  "regex",
  "reqwest",
- "rig-core 0.13.0",
+ "rig-core",
  "rig-qdrant",
  "serde",
  "serde_json",
@@ -1126,7 +1126,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "dashmap",
- "rig-core 0.13.0",
+ "rig-core",
  "serde",
  "serde_json",
  "sqlx",
@@ -2185,15 +2185,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ordered-float"
-version = "5.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2c1f9f56e534ac6a9b8a4600bdf0f530fb393b5f393e7b4d03489c3cf0c3f01"
-dependencies = [
- "num-traits",
-]
-
-[[package]]
 name = "overload"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2715,7 +2706,7 @@ dependencies = [
  "futures",
  "glob",
  "mime_guess",
- "ordered-float 4.6.0",
+ "ordered-float",
  "reqwest",
  "schemars",
  "serde",
@@ -2725,35 +2716,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "rig-core"
-version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "969de7ef951d6fa1c5dfae35702ddcf5ed95eea2db0648b9a87849b92b86bfbc"
-dependencies = [
- "as-any",
- "async-stream",
- "base64 0.22.1",
- "bytes",
- "futures",
- "glob",
- "mime_guess",
- "ordered-float 5.0.0",
- "reqwest",
- "schemars",
- "serde",
- "serde_json",
- "thiserror 2.0.12",
- "tracing",
-]
-
-[[package]]
 name = "rig-qdrant"
-version = "0.1.16"
+version = "0.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a25f03e3c5fa708edcc2176f6b2c0258abd140106dd0587bc3407a3d4318533"
+checksum = "3a3d1fd57f8d7361af20e3cc112f49929df24f83b69afa93a8f0f2aff37c0395"
 dependencies = [
  "qdrant-client",
- "rig-core 0.15.0",
+ "rig-core",
  "serde",
  "serde_json",
  "uuid",
