@@ -30,11 +30,12 @@ warp = { version = "0.3", features = ["tls"] }
 graph-flow = { git = "https://github.com/a-agmon/rs-graph-llm.git", package = "graph-flow", branch = "main", features = [
     "rig",
 ] }
+qdrant-client = "1.14.1"
+
 async-trait = "0.1"
-rig-core = "0.13.0"
-rig-qdrant = "0.1.14"
-qdrant-client = "1.14.0"
+rig-qdrant = "=0.1.14"
 uuid = "1.17.0"
+rig-core = "0.13.0"
 
 [dev-dependencies]
 tempfile = "3"

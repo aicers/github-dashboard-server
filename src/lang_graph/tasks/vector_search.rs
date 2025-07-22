@@ -1,5 +1,3 @@
-use core::prelude;
-
 use async_trait::async_trait;
 use graph_flow::{Context, GraphError, NextAction, Task, TaskResult};
 use qdrant_client::{
@@ -14,8 +12,7 @@ use tracing::{error, info};
 
 use crate::lang_graph::{
     session_keys,
-    types::{query::EnhancedQuery, response::VectorSearchResult},
-    utils::pretty_log,
+    types::{query::Segment, response::VectorSearchResult},
 };
 
 pub struct VectorSearchTask;
@@ -26,8 +23,32 @@ impl VectorSearchTask {
 }
 
 #[async_trait]
+#[allow(clippy::too_many_lines)]
 impl Task for VectorSearchTask {
     async fn run(&self, context: Context) -> graph_flow::Result<TaskResult> {
+        info!("{}", self.id());
+        let session_id = context
+            .get::<String>("session_id")
+            .await
+            .unwrap_or_else(|| "unknown".to_string());
+        info!("VectorSearchTask started. Session: {}", session_id);
+        let qualitative_segments: Vec<Segment> = context
+            .get_sync(session_keys::QUALITATIVE_SEGMENTS)
+            .unwrap_or_default();
+
+        if qualitative_segments.is_empty() {
+            context
+                .set(
+                    session_keys::VECTOR_SEARCH_RESULTS,
+                    Vec::<(Segment, Vec<VectorSearchResult>)>::new(),
+                )
+                .await;
+            return Ok(TaskResult::new(
+                Some("No qualitative segments found".to_string()),
+                NextAction::Continue,
+            ));
+        }
+
         const COLLECTION_NAME: &str = "rag";
         info!("VectorSearchTask started");
         let db_client = Qdrant::from_url("http://localhost:6334")
@@ -40,7 +61,7 @@ impl Task for VectorSearchTask {
         if !db_client
             .collection_exists(COLLECTION_NAME)
             .await
-            .map_err(|e| anyhow::Error::from(e))?
+            .map_err(anyhow::Error::from)?
         {
             info!(
                 "Collection '{}' does not exist. Creating...",
@@ -52,7 +73,7 @@ impl Task for VectorSearchTask {
                         .vectors_config(VectorParamsBuilder::new(768, Distance::Cosine)),
                 )
                 .await
-                .map_err(|e| anyhow::Error::from(e))?;
+                .map_err(anyhow::Error::from)?;
             info!("Collection '{}' created.", COLLECTION_NAME);
         }
         let llm = Client::new();
@@ -60,60 +81,63 @@ impl Task for VectorSearchTask {
         let query_params = QueryPointsBuilder::new(COLLECTION_NAME).with_payload(true);
         let vector_store = QdrantVectorStore::new(db_client, model, query_params.build());
 
-        let enhanced_query: EnhancedQuery = context
-            .get_sync(session_keys::ENHANCED_QUERY)
-            .ok_or_else(|| {
-                error!("No enhanced query found in context");
-                GraphError::ContextError("No enhanced query found".to_string())
-            })?;
-        let search_text = &enhanced_query.original;
-        info!("Search text: {}", search_text);
+        let mut segement_vector_results = Vec::new();
 
-        // Qdrant 벡터 검색 수행
-        info!("Performing vector search...");
-        let results = match vector_store.top_n(search_text, 10).await {
-            Ok(r) => r,
-            Err(e) => {
-                error!("Vector search error: {}", e);
-                return Err(GraphError::ContextError(format!(
-                    "Vector search error: {}",
-                    e
-                )));
-            }
-        };
-        info!("Vector search returned {} results", results.len());
+        for segment in &qualitative_segments {
+            info!("Processing segment: {:?}", segment);
+            info!("Query text: {}", segment.enhanced);
 
-        // 검색 결과를 VectorSearchResult로 변환
-        let vector_results: Vec<VectorSearchResult> = results
-            .into_iter()
-            .map(|(score, id, payload)| VectorSearchResult {
-                id: id.to_string(),
-                content: payload
-                    .get("page_content")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string(),
-                metadata: serde_json::to_value(payload.get("metadata")).unwrap_or_default(),
-                score: score as f32,
-            })
-            .collect();
+            info!("Performing vector search...");
+            let results = match vector_store.top_n(&segment.enhanced, 10).await {
+                Ok(r) => r,
+                Err(e) => {
+                    error!("Vector search error: {}", e);
+                    return Err(GraphError::ContextError(format!(
+                        "Vector search error: {e}"
+                    )));
+                }
+            };
+            info!("Vector search returned {} results", results.len());
+
+            let vector_results: Vec<VectorSearchResult> = results
+                .into_iter()
+                .map(|(score, id, payload)| VectorSearchResult {
+                    id: id.to_string(),
+                    content: payload
+                        .get("page_content")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string(),
+                    metadata: serde_json::to_value(payload.get("metadata")).unwrap_or_default(),
+                    score: score as f32,
+                })
+                .collect();
+
+            info!(
+                "Segment '{}' vector search results: {:?}",
+                segment.enhanced, vector_results
+            );
+            segement_vector_results.push((segment.clone(), vector_results));
+        }
 
         context
-            .set(session_keys::VECTOR_SEARCH_RESULTS, vector_results.clone())
+            .set(
+                session_keys::VECTOR_SEARCH_RESULTS,
+                segement_vector_results.clone(),
+            )
             .await;
         context
-            .add_assistant_message(format!("Found {} relevant documents", vector_results.len()))
+            .add_assistant_message(format!(
+                "Found {} relevant documents",
+                segement_vector_results.len()
+            ))
             .await;
         info!("Context updated with vector search results");
-        pretty_log(
-            "VectorSearchTask finished. Results:",
-            &serde_json::to_string(&vector_results).unwrap_or_default(),
-        );
 
         Ok(TaskResult::new(
             Some(format!(
                 "Vector search completed with {} results",
-                vector_results.len()
+                segement_vector_results.len()
             )),
             NextAction::Continue, // or NextAction::Continue if you want to keep the flow going
         ))

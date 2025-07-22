@@ -10,8 +10,10 @@ use tracing::info;
 
 use crate::lang_graph::{
     session_keys,
-    types::{query::EnhancedQuery, response::VectorSearchResult},
-    utils::pretty_log,
+    types::{
+        query::Segment,
+        response::{QualitativeResult, VectorSearchResult},
+    },
 };
 
 pub struct RAGGenerationTask {
@@ -52,66 +54,72 @@ impl Task for RAGGenerationTask {
 
         info!("RAGGenerationTask started. Session: {}", session_id);
 
-        let enhanced_query: EnhancedQuery = context
-            .get_sync(session_keys::ENHANCED_QUERY)
-            .ok_or_else(|| GraphError::ContextError("No enhanced query found".to_string()))?;
-
-        let reranked_contexts: Vec<VectorSearchResult> = context
+        let reranked_contexts: Vec<(Segment, Vec<VectorSearchResult>)> = context
             .get_sync(session_keys::RERANKED_CONTEXTS)
             .ok_or_else(|| GraphError::ContextError("No reranked query found".to_string()))?;
 
+        let mut segment_rag_responses = Vec::new();
         if reranked_contexts.is_empty() {
+            context
+                .set(session_keys::RAG_RESPONSE, segment_rag_responses.clone())
+                .await;
             return Ok(TaskResult::new(
                 Some("No relevant contexts found for RAG generation".to_string()),
                 NextAction::Continue,
             ));
         }
-        info!(
-            "RAGGenerationTask found {} relevant contexts for query: {}",
-            reranked_contexts.len(),
-            enhanced_query.original
-        );
+        for (segment, reranked_result) in &reranked_contexts {
+            info!("Reranked Segment: {}", segment.enhanced);
+            let prompt = format!(
+                "Analyze this GitHub repository query: {}, \n\nContext:\n{}",
+                segment.enhanced,
+                serde_json::to_string(reranked_result)
+                    .unwrap_or_else(|_| "No context available".to_string())
+            );
+            info!(
+                "{}",
+                reranked_result
+                    .iter()
+                    .map(|r| format!(
+                        "ID: {}, Score: {}, Content: {}, metadata: {}",
+                        r.id, r.score, r.content, r.metadata
+                    ))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            );
 
-        let prompt = format!(
-            "Analyze this GitHub repository query: {}, \n\nContext:\n{}",
-            enhanced_query.original,
-            reranked_contexts
-                .iter()
-                .map(|r| format!(
-                    "ID: {}, Score: {}, Content: {}, metadata: {}",
-                    r.id, r.score, r.content, r.metadata
-                ))
-                .collect::<Vec<_>>()
-                .join("\n")
-        );
-        info!(
-            "{}",
-            reranked_contexts
-                .iter()
-                .map(|r| format!(
-                    "ID: {}, Score: {}, Content: {}, metadata: {}",
-                    r.id, r.score, r.content, r.metadata
-                ))
-                .collect::<Vec<_>>()
-                .join("\n")
-        );
-        info!("Sending chat to LLM for RAG generation...");
-        let response = self
-            .agent
-            .chat(&prompt, context.get_rig_messages().await)
-            .await
-            .map_err(|e| GraphError::TaskExecutionFailed(format!("LLM error: {e}")))?;
-        info!("RAG generation response received");
-        // pretty_log("RAGGenerationTask finished. Response:", &response);
-        info!("RAGGenerationTask finished. Response: {}", &response);
-        context.add_assistant_message(response.clone()).await;
+            let response = self
+                .agent
+                .chat(&prompt, context.get_rig_messages().await)
+                .await
+                .map_err(|e| GraphError::TaskExecutionFailed(format!("LLM error: {e}")))?;
+            info!("RAG generation response received");
+            info!("RAGGenerationTask finished. Response: {}", response);
+            let rag_response = QualitativeResult {
+                segment_id: segment.id.clone(),
+                generated_response: response,
+                vector_search_results: reranked_result.clone(),
+            };
+
+            segment_rag_responses.push(rag_response);
+        }
+
         context
-            .set(session_keys::RAG_RESPONSE, response.clone())
+            .add_assistant_message(format!(
+                "RAG generation completed for {} segments",
+                segment_rag_responses.len()
+            ))
+            .await;
+        context
+            .set(session_keys::RAG_RESPONSE, segment_rag_responses.clone())
             .await;
         info!("Context updated with RAG generation response");
         Ok(TaskResult::new(
-            Some(format!("RAG generation completed: {response}")),
-            NextAction::End,
+            Some(format!(
+                "RAG generation completed: {} segments",
+                segment_rag_responses.len()
+            )),
+            NextAction::Continue,
         ))
     }
 }

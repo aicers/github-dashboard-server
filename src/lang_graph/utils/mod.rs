@@ -1,7 +1,12 @@
 use serde_json::Value;
 
 pub fn pretty_log(message: &str, data: &str) {
-    let parsed: Value = serde_json::from_str(data).unwrap();
+    let parsed: Value = serde_json::from_str(data).unwrap_or_else(|_| {
+        serde_json::json!({
+            "error": "Failed to parse JSON",
+            "data": data
+        })
+    });
     tracing::info!(
         "{message} {}",
         serde_json::to_string_pretty(&parsed).unwrap()
