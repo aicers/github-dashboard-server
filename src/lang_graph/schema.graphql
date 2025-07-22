@@ -1,0 +1,210 @@
+# Indicates that an Input Object is a OneOf Input Object (and thus requires
+#                         exactly one of its field be provided)
+directive @oneOf on INPUT_OBJECT
+
+# Implement the DateTime<Utc> scalar
+#
+# The input/output is a string in RFC3339 format.
+scalar DateTime
+
+type Issue {
+  owner: String!
+  repo: String!
+  number: Int!
+  title: String!
+  author: String!
+  state: IssueState!
+  createdAt: DateTime!
+}
+
+type IssueConnection {
+  # Information to aid in pagination.
+  pageInfo: PageInfo!
+
+  # A list of edges.
+  edges: [IssueEdge!]!
+
+  # A list of nodes.
+  nodes: [Issue!]!
+}
+
+# An edge in a connection.
+type IssueEdge {
+  # The item at the end of the edge
+  node: Issue!
+
+  # A cursor for use in pagination
+  cursor: String!
+}
+
+type PullRequestStat {
+  # The number of open pull requests.
+  openPullRequestCount: Int!
+
+  # Total number of pull requests.
+  totalPullRequestCount: Int!
+
+  # Total number of merged pull requests.
+  mergedPullRequestCount: Int!
+}
+
+scalar IssueState
+
+# Information about pagination in a connection
+type PageInfo {
+  # When paginating backwards, are there more items?
+  hasPreviousPage: Boolean!
+
+  # When paginating forwards, are there more items?
+  hasNextPage: Boolean!
+
+  # When paginating backwards, the cursor to continue.
+  startCursor: String
+
+  # When paginating forwards, the cursor to continue.
+  endCursor: String
+}
+
+type PullRequest {
+  owner: String!
+  repo: String!
+  number: Int!
+  title: String!
+  assignees: [String!]!
+  reviewers: [String!]!
+}
+
+type PullRequestConnection {
+  # Information to aid in pagination.
+  pageInfo: PageInfo!
+
+  # A list of edges.
+  edges: [PullRequestEdge!]!
+
+  # A list of nodes.
+  nodes: [PullRequest!]!
+}
+
+# An edge in a connection.
+type PullRequestEdge {
+  # The item at the end of the edge
+  node: PullRequest!
+
+  # A cursor for use in pagination
+  cursor: String!
+}
+
+# A set of queries defined in the schema.
+#
+# This is exposed only for [`Schema`], and not used directly.
+type Query {
+  issues(after: String, before: String, first: Int, last: Int): IssueConnection!
+  pullRequests(
+    after: String
+    before: String
+    first: Int
+    last: Int
+  ): PullRequestConnection!
+  issueStat(filter: IssueStatFilter!): IssueStat!
+  pullRequestStat(filter: PullRequestStatFilter!): PullRequestStat!
+}
+
+input IssueStatFilter {
+  # Assignee of the issues.
+  assignee: [String!]
+
+  # Author of the issues.
+  author: String
+
+  # Repository name.
+  repo: String
+
+  # Start of the 'createdAt' datetime range.
+  # Example: 2023-01-01T00:00:00Z
+  createdAtBegin: DateTime
+
+  # End of the 'createdAt' datetime range.
+  # Example: 2023-01-01T00:00:00Z
+  createdAtEnd: DateTime
+
+  # Start of the 'closedAt' datetime range.
+  # Example: 2023-01-01T00:00:00Z
+  closedAtBegin: DateTime
+
+  # End of the 'closedAt' datetime range.
+  # Example: 2023-01-01T00:00:00Z
+  closedAtEnd: DateTime
+
+  # Start of the 'updatedAt' datetime range.
+  # Example: 2023-01-01T00:00:00Z
+  updatedAtBegin: DateTime
+
+  # End of the 'updatedAt' datetime range.
+  # Example: 2023-01-01T00:00:00Z
+  updatedAtEnd: DateTime
+
+  # IP address of the author.
+  ipAddress: String
+
+  # Issue priority.
+  priority: IssuePriority
+
+  # The author and assignee pair.
+  authorAssigneePair: IssueAuthorAssigneePair
+
+  # The length of the issue body in characters.
+  bodyLength: Int
+
+  # true if the issue is open, false if closed.
+  isOpen: Boolean
+
+  # The number of days it took to close the issue.
+  daysToClose: Float
+
+  # The number of comments on the issue.
+  numOfComments: Int
+}
+
+type IssueStat {
+  # The number of open issues.
+  openIssueCount: Int!
+
+  # Total number of issues.
+  totalIssueCount: Int!
+}
+
+# P0 is the highest priority, P1 is medium, and P2 is the lowest.
+enum IssuePriority {
+  P0
+  P1
+  P2
+}
+
+input IssueAuthorAssigneePair {
+  author: String!
+  assignee: String!
+}
+
+input PullRequestStatFilter {
+  # Author of the PR.
+  author: String
+
+  # Repository name.
+  repo: String
+
+  # Start of the 'createdAt' datetime range.
+  # Example: 2023-01-01T00:00:00Z
+  createdAtBegin: DateTime
+
+  # End of the 'createdAt' datetime range.
+  # Example: 2023-01-01T00:00:00Z
+  createdAtEnd: DateTime
+
+  closedAtBegin: DateTime
+  closedAtEnd: DateTime
+  mergedAtBegin: DateTime
+  mergedAtEnd: DateTime
+  reviewer: String
+  numOfReviewers: Int
+  additions: Int
+}

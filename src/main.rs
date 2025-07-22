@@ -57,8 +57,10 @@ async fn main() -> Result<()> {
         // "What proportion of closed discussions contain action items that are not tracked in any issues or PRs?",
         // "Are there any spikes in activity (issues, PRs, discussions) that correlate with external events (e.g., release cycles)?",
         // "Identify contributors who initiated a discussion and later implemented the solution via a PR.",
-        "Are there contributors whose activity patterns suggest they work on this repo during specific times of day or week?",
+        // "Are there contributors whose activity patterns suggest they work on this repo during specific times of day or week?",
         "What is the issue number for 'CI setup using GitHub Actions'?",
+        "danbi2990이 생성한 이슈는 몇 개야?",
+        "How many total issues were opened by danbi2990?",
     ];
 
     for query in queries {
