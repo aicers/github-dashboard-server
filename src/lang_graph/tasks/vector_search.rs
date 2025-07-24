@@ -1,15 +1,9 @@
 use async_trait::async_trait;
 use graph_flow::{Context, GraphError, NextAction, Task, TaskResult};
-use qdrant_client::{
-    qdrant::{CreateCollectionBuilder, Distance, QueryPointsBuilder, VectorParamsBuilder},
-    Qdrant,
-};
-use rig::client::EmbeddingsClient;
-use rig::providers::ollama::NOMIC_EMBED_TEXT;
-use rig::{providers::ollama::Client, vector_store::VectorStoreIndexDyn};
-use rig_qdrant::QdrantVectorStore;
+use rig::vector_store::VectorStoreIndexDyn;
 use tracing::{error, info};
 
+use crate::lang_graph::vector_db::get_storage;
 use crate::lang_graph::{
     session_keys,
     types::{query::Segment, response::VectorSearchResult},
@@ -49,38 +43,9 @@ impl Task for VectorSearchTask {
             ));
         }
 
-        const COLLECTION_NAME: &str = "rag";
         info!("VectorSearchTask started");
-        let db_client = Qdrant::from_url("http://localhost:6334")
-            .build()
-            .map_err(|e| {
-                error!("Qdrant client build error: {}", e);
-                anyhow::Error::from(e)
-            })?;
 
-        if !db_client
-            .collection_exists(COLLECTION_NAME)
-            .await
-            .map_err(anyhow::Error::from)?
-        {
-            info!(
-                "Collection '{}' does not exist. Creating...",
-                COLLECTION_NAME
-            );
-            db_client
-                .create_collection(
-                    CreateCollectionBuilder::new(COLLECTION_NAME)
-                        .vectors_config(VectorParamsBuilder::new(768, Distance::Cosine)),
-                )
-                .await
-                .map_err(anyhow::Error::from)?;
-            info!("Collection '{}' created.", COLLECTION_NAME);
-        }
-        let llm = Client::new();
-        let model = llm.embedding_model(NOMIC_EMBED_TEXT);
-        let query_params = QueryPointsBuilder::new(COLLECTION_NAME).with_payload(true);
-        let vector_store = QdrantVectorStore::new(db_client, model, query_params.build());
-
+        let vector_store = get_storage().await?;
         let mut segement_vector_results = Vec::new();
 
         for segment in &qualitative_segments {
