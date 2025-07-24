@@ -3,6 +3,7 @@ pub mod session_keys;
 pub mod tasks;
 pub mod types;
 pub mod utils;
+pub mod vector_db;
 
 use std::{any::type_name, sync::Arc};
 
