@@ -3,10 +3,12 @@ use graph_flow::{Context, GraphError, NextAction, Task, TaskResult};
 use rig::vector_store::VectorStoreIndexDyn;
 use tracing::{error, info};
 
-use crate::lang_graph::vector_db::get_storage;
-use crate::lang_graph::{
-    session_keys,
-    types::{query::Segment, response::VectorSearchResult},
+use crate::{
+    lang_graph::{
+        session_keys,
+        types::{query::Segment, response::VectorSearchResult},
+    },
+    vector_db::get_storage,
 };
 
 pub struct VectorSearchTask;
