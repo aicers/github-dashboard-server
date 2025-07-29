@@ -1,15 +1,18 @@
-use std::{sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use anyhow::{bail, Context, Result};
 use graphql_client::{GraphQLQuery, QueryBody, Response as GraphQlResponse};
 use jiff::Timestamp;
 use reqwest::{Client, RequestBuilder, Response};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use tokio::time;
 use tracing::error;
+use tracing::info;
 
 pub use self::pull_requests::{PullRequestReviewState, PullRequestState as PRPullRequestState};
 use crate::database::DiscussionDbSchema;
+use crate::vector_db;
 use crate::{
     database::Database,
     outbound::{
@@ -33,6 +36,7 @@ use crate::{
         },
     },
     settings::Repository as RepoInfo,
+    vector_db::{DocumentType, GithubDocument},
 };
 
 const GITHUB_FETCH_SIZE: i64 = 10;
@@ -68,6 +72,41 @@ struct PullRequests;
     response_derives = "Debug"
 )]
 pub(crate) struct Discussions;
+
+pub trait GithubData {
+    fn get_number(&self) -> i32;
+    fn get_author(&self) -> String;
+}
+
+impl GithubData for GitHubIssue {
+    fn get_number(&self) -> i32 {
+        self.number
+    }
+
+    fn get_author(&self) -> String {
+        self.author.clone()
+    }
+}
+
+impl GithubData for GitHubPullRequestNode {
+    fn get_number(&self) -> i32 {
+        self.number
+    }
+
+    fn get_author(&self) -> String {
+        self.author.clone()
+    }
+}
+
+impl GithubData for DiscussionDbSchema {
+    fn get_number(&self) -> i32 {
+        self.number
+    }
+
+    fn get_author(&self) -> String {
+        self.author.clone()
+    }
+}
 
 #[allow(clippy::derivable_impls)]
 impl Default for IssueState {
@@ -276,6 +315,13 @@ pub(super) async fn fetch_periodically(
                 {
                     Ok(resps) => {
                         for resp in resps {
+                            let _ = add_documents(
+                                &repoinfo.owner,
+                                &repoinfo.name,
+                                &resp,
+                                DocumentType::Issue,
+                            )
+                            .await;
                             if let Err(error) =
                                 db.insert_issues(resp, &repoinfo.owner, &repoinfo.name)
                             {
@@ -297,6 +343,7 @@ pub(super) async fn fetch_periodically(
                 match send_github_pr_query(&repoinfo.owner, &repoinfo.name, &token).await {
                     Ok(resps) => {
                         for resp in resps {
+                            //TODO:
                             if let Err(error) =
                                 db.insert_pull_requests(resp, &repoinfo.owner, &repoinfo.name)
                             {
@@ -317,6 +364,13 @@ pub(super) async fn fetch_periodically(
                 re_itv.tick().await;
                 match send_github_discussion_query(&repoinfo.owner, &repoinfo.name, &token).await {
                     Ok(resps) => {
+                        let _ = add_documents(
+                            &repoinfo.owner,
+                            &repoinfo.name,
+                            &resps,
+                            DocumentType::Discussion,
+                        )
+                        .await;
                         if let Err(error) =
                             db.insert_discussions(resps, &repoinfo.owner, &repoinfo.name)
                         {
@@ -332,6 +386,40 @@ pub(super) async fn fetch_periodically(
             }
         }
     }
+}
+
+async fn add_documents<T>(
+    owner: &String,
+    name: &String,
+    resp: &[T],
+    doc_type: DocumentType,
+) -> Result<()>
+where
+    T: Serialize + GithubData,
+{
+    let docs = resp
+        .iter()
+        .map(|item| {
+            let mut metadata = HashMap::new();
+            metadata.insert("type".to_string(), json!(doc_type));
+            metadata.insert("repo".to_string(), json!(format!("{}/{}", &owner, &name)));
+            metadata.insert("number".to_string(), json!(item.get_number()));
+            metadata.insert("author".to_string(), json!(item.get_author()));
+            GithubDocument {
+                id: format!("{}/{}/{}", &owner, &name, item.get_number()),
+                page_content: serde_json::to_string(item).unwrap_or_default(),
+                metadata,
+            }
+        })
+        .collect::<Vec<GithubDocument>>();
+
+    let data = vector_db::add_documents_in_vector_store(docs.clone()).await;
+    match data {
+        Ok(_) => {}
+        Err(e) => error!("{e}"),
+    }
+    info!("[RAG] Success Appending {} {}", docs.len(), doc_type);
+    Ok(())
 }
 
 #[allow(clippy::too_many_lines)]

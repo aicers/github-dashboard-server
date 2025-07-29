@@ -2779,36 +2779,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "rig-core"
-version = "0.17.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e57d16b6bc8ed1a4d7cea51782f1c6320e0a98b01a8de719540251a81b027ffb"
-dependencies = [
- "as-any",
- "async-stream",
- "base64 0.22.1",
- "bytes",
- "futures",
- "glob",
- "mime_guess",
- "ordered-float 5.0.0",
- "reqwest",
- "schemars",
- "serde",
- "serde_json",
- "thiserror 2.0.12",
- "tracing",
- "url",
-]
-
-[[package]]
 name = "rig-qdrant"
-version = "0.1.20"
+version = "0.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c80f84a2b40d7a01966e5a39870149367d415f6f946cf64f73a3493e07f877e"
+checksum = "3a3d1fd57f8d7361af20e3cc112f49929df24f83b69afa93a8f0f2aff37c0395"
 dependencies = [
  "qdrant-client",
- "rig-core 0.17.1",
+ "rig-core",
  "serde",
  "serde_json",
  "uuid",
