@@ -41,7 +41,7 @@ async fn main() -> Result<()> {
 
     tracing_subscriber::fmt::init();
 
-    // let rag_system = GitHubRAGSystem::new().await?;
+    let rag_system = GitHubRAGSystem::new().await?;
 
     // Fetches issues and pull requests from GitHub every hour, and stores them in the database.
     task::spawn(github::fetch_periodically(
@@ -58,7 +58,7 @@ async fn main() -> Result<()> {
         settings.certification.ssh,
     ));
 
-    let schema = graphql::schema(database);
+    let schema = graphql::schema(database, rag_system);
 
     web::serve(schema, settings.web.address, &args.key, &args.cert).await;
     Ok(())

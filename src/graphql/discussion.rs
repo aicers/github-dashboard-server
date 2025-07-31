@@ -87,11 +87,13 @@ mod tests {
         },
         github::discussions::ReactionContent,
         graphql::TestSchema,
+        lang_graph::GitHubRAGSystem,
     };
 
     #[tokio::test]
     async fn discussion_empty() {
-        let schema = TestSchema::new();
+        let rag = GitHubRAGSystem::new().await.unwrap();
+        let schema = TestSchema::new().await;
         let query = r"
         {
             discussions {
@@ -108,7 +110,7 @@ mod tests {
     #[allow(clippy::too_many_lines)]
     #[tokio::test]
     async fn discussions_first() {
-        let schema = TestSchema::new();
+        let schema = TestSchema::new().await;
         let date = "2025/06/05".to_string();
         let discussions = vec![DiscussionDbSchema {
             number: 123,

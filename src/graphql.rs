@@ -2,6 +2,7 @@ mod discussion;
 pub(crate) mod issue;
 pub(crate) mod issue_stat;
 pub(crate) mod pull_request;
+pub(crate) mod rag;
 
 use std::fmt::Display;
 
@@ -14,7 +15,7 @@ use base64::{engine::general_purpose, Engine as _};
 use jiff::Timestamp;
 
 pub(crate) use self::discussion::Discussion;
-use crate::database::Database;
+use crate::{database::Database, lang_graph::GitHubRAGSystem};
 
 /// The default page size for connections when neither `first` nor `last` is
 /// provided.
@@ -29,6 +30,7 @@ pub(crate) struct Query(
     pull_request::PullRequestQuery,
     issue_stat::IssueStatQuery,
     discussion::DiscussionQuery,
+    rag::RagQuery,
 );
 
 pub(crate) type Schema = async_graphql::Schema<Query, EmptyMutation, EmptySubscription>;
@@ -69,9 +71,10 @@ where
     connection
 }
 
-pub(crate) fn schema(database: Database) -> Schema {
+pub(crate) fn schema(database: Database, rag: GitHubRAGSystem) -> Schema {
     Schema::build(Query::default(), EmptyMutation, EmptySubscription)
         .data(database)
+        .data(rag)
         .finish()
 }
 
@@ -156,10 +159,11 @@ struct TestSchema {
 
 #[cfg(test)]
 impl TestSchema {
-    fn new() -> Self {
+    async fn new() -> Self {
         let db_dir = tempfile::tempdir().unwrap();
         let db = Database::connect(db_dir.path()).unwrap();
-        let schema = schema(db.clone());
+        let rag = GitHubRAGSystem::new().await.unwrap();
+        let schema = schema(db.clone(), rag);
         Self {
             _dir: db_dir,
             db,
