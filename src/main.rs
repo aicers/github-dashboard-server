@@ -41,7 +41,7 @@ async fn main() -> Result<()> {
 
     tracing_subscriber::fmt::init();
 
-    // let rag_system = GitHubRAGSystem::new().await?;
+    let rag_system = GitHubRAGSystem::new().await?;
 
     // Fetches issues and pull requests from GitHub every hour, and stores them in the database.
 
@@ -59,7 +59,7 @@ async fn main() -> Result<()> {
         database.clone(),
     ));
 
-    let schema = api::schema(database);
+    let schema = api::schema(database, rag_system);
 
     web::serve(schema, settings.web.address, &args.key, &args.cert).await;
     Ok(())

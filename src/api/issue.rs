@@ -254,7 +254,7 @@ mod tests {
 
     #[tokio::test]
     async fn issues_empty() {
-        let schema = TestSchema::new();
+        let schema = TestSchema::new().await;
         let query = r"
         {
             issues {
@@ -271,7 +271,7 @@ mod tests {
 
     #[tokio::test]
     async fn issues_first() {
-        let schema = TestSchema::new();
+        let schema = TestSchema::new().await;
         let issues = create_issues(3);
         schema.db.insert_issues(issues, "owner", "name").unwrap();
 
@@ -311,7 +311,7 @@ mod tests {
 
     #[tokio::test]
     async fn issues_last() {
-        let schema = TestSchema::new();
+        let schema = TestSchema::new().await;
         let issues = create_issues(3);
         schema.db.insert_issues(issues, "owner", "name").unwrap();
 

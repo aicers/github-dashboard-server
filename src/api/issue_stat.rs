@@ -94,7 +94,7 @@ mod tests {
 
     #[tokio::test]
     async fn open_issue_count_by_author() {
-        let schema = TestSchema::new();
+        let schema = TestSchema::new().await;
         let mut issues = create_issues(3);
         issues[0].author = "foo".to_string();
         schema
@@ -114,7 +114,7 @@ mod tests {
 
     #[tokio::test]
     async fn open_issue_count_by_begin_end() {
-        let schema = TestSchema::new();
+        let schema = TestSchema::new().await;
         let mut issues = create_issues(3);
         issues[1].created_at = parse("2025-01-05T00:00:00Z");
         issues[2].created_at = parse("2025-01-06T00:00:00Z");
@@ -146,7 +146,7 @@ mod tests {
 
     #[tokio::test]
     async fn open_issue_count_by_author_and_dates() {
-        let schema = TestSchema::new();
+        let schema = TestSchema::new().await;
         let mut issues = create_issues(3);
         issues[1].author = "foo".to_string();
         issues[1].created_at = parse("2025-01-05T00:00:00Z");
@@ -169,7 +169,7 @@ mod tests {
 
     #[tokio::test]
     async fn open_issue_count_by_repo() {
-        let schema = TestSchema::new();
+        let schema = TestSchema::new().await;
         let server_issues = create_issues(2);
         let client_issues = create_issues(1);
 
@@ -194,7 +194,7 @@ mod tests {
 
     #[tokio::test]
     async fn open_issue_count_by_repo_and_author() {
-        let schema = TestSchema::new();
+        let schema = TestSchema::new().await;
         let server_issues = create_issues(1);
         let mut client_issues = create_issues(2);
         client_issues[1].author = "foo".to_string();
@@ -219,7 +219,7 @@ mod tests {
 
     #[tokio::test]
     async fn open_issue_count_by_assignee() {
-        let schema = TestSchema::new();
+        let schema = TestSchema::new().await;
         let mut issues = create_issues(3);
         issues[0].assignees = vec!["alice".to_string(), "bob".to_string()];
         issues[1].assignees = vec!["alice".to_string()];

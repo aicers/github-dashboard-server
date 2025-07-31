@@ -253,7 +253,7 @@ mod tests {
 
     #[tokio::test]
     async fn pull_requests_empty() {
-        let schema = TestSchema::new();
+        let schema = TestSchema::new().await;
         let query = r"
         {
             pullRequests {
@@ -272,7 +272,7 @@ mod tests {
     #[tokio::test]
     #[allow(clippy::too_many_lines)]
     async fn pull_requests_first() {
-        let schema = TestSchema::new();
+        let schema = TestSchema::new().await;
         let pull_requests = vec![
             GitHubPullRequestNode {
                 id: "pr-1".to_string(),
@@ -389,7 +389,7 @@ mod tests {
     #[tokio::test]
     #[allow(clippy::too_many_lines)]
     async fn pull_requests_last() {
-        let schema = TestSchema::new();
+        let schema = TestSchema::new().await;
         let pull_requests = vec![
             GitHubPullRequestNode {
                 id: "pr-1".to_string(),

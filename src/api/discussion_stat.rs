@@ -87,7 +87,7 @@ mod tests {
 
     #[tokio::test]
     async fn total_count_by_author() {
-        let schema = TestSchema::new();
+        let schema = TestSchema::new().await;
         let mut discussions = create_discussions(3);
         discussions[0].author = "foo".to_string();
         schema
@@ -107,7 +107,7 @@ mod tests {
 
     #[tokio::test]
     async fn total_count_by_begin_end() {
-        let schema = TestSchema::new();
+        let schema = TestSchema::new().await;
         let mut discussions = create_discussions(3);
         discussions[1].created_at = parse("2025-01-05T00:00:00Z");
         discussions[2].created_at = parse("2025-01-06T00:00:00Z");
@@ -139,7 +139,7 @@ mod tests {
 
     #[tokio::test]
     async fn total_count_by_repo() {
-        let schema = TestSchema::new();
+        let schema = TestSchema::new().await;
         let server_discussions = create_discussions(2);
         let client_discussions = create_discussions(1);
 

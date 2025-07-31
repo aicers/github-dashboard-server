@@ -91,12 +91,14 @@ mod tests {
             },
             DiscussionDbSchema,
         },
+        lang_graph::GitHubRAGSystem,
         outbound::discussions::ReactionContent,
     };
 
     #[tokio::test]
     async fn discussion_empty() {
-        let schema = TestSchema::new();
+        let rag = GitHubRAGSystem::new().await.unwrap();
+        let schema = TestSchema::new().await;
         let query = r"
         {
             discussions {
@@ -113,7 +115,7 @@ mod tests {
     #[allow(clippy::too_many_lines)]
     #[tokio::test]
     async fn discussions_first() {
-        let schema = TestSchema::new();
+        let schema = TestSchema::new().await;
         let date = "2025-06-05T00:00:00Z".parse::<Timestamp>().unwrap();
         let discussions = vec![DiscussionDbSchema {
             number: 123,
