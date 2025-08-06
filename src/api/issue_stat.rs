@@ -1,9 +1,9 @@
 use async_graphql::{Context, InputObject, Object, Result, SimpleObject};
 
 use crate::{
+    api::{issue::Issue, DateTimeUtc},
     database::Iter,
-    github::issues::IssueState,
-    graphql::{issue::Issue, DateTimeUtc},
+    outbound::issues::IssueState,
     Database,
 };
 
@@ -80,7 +80,7 @@ impl IssueStatQuery {
 mod tests {
     use jiff::Timestamp;
 
-    use crate::{github::GitHubIssue, graphql::TestSchema};
+    use crate::{api::TestSchema, outbound::GitHubIssue};
 
     fn create_issues(n: usize) -> Vec<GitHubIssue> {
         (0..n)

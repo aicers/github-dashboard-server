@@ -10,8 +10,8 @@ pub mod discussion;
 pub(crate) use discussion::DiscussionDbSchema;
 
 use crate::{
-    github::{GitHubIssue, GitHubPullRequests},
-    graphql::{issue::Issue, pull_request::PullRequest},
+    api::{issue::Issue, pull_request::PullRequest},
+    outbound::{GitHubIssue, GitHubPullRequests},
 };
 
 const ISSUE_TREE_NAME: &str = "issues";

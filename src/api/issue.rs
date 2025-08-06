@@ -8,12 +8,13 @@ use async_graphql::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    api,
+    api::DateTimeUtc,
     database::{self, Database, TryFromKeyValue},
-    github::{
+    outbound::{
         issues::{IssueState, PullRequestState},
         GitHubIssue,
     },
-    graphql::DateTimeUtc,
 };
 
 scalar!(IssueState);
@@ -231,7 +232,7 @@ impl IssueQuery {
             first,
             last,
             |after, before, first, last| async move {
-                super::load_connection(ctx, Database::issues, after, before, first, last)
+                api::load_connection(ctx, Database::issues, after, before, first, last)
             },
         )
         .await
@@ -240,7 +241,7 @@ impl IssueQuery {
 
 #[cfg(test)]
 mod tests {
-    use crate::{github::GitHubIssue, graphql::TestSchema};
+    use crate::{api::TestSchema, outbound::GitHubIssue};
 
     fn create_issues(n: usize) -> Vec<GitHubIssue> {
         (1..=n)

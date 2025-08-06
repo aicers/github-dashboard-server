@@ -4,7 +4,8 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 use super::{Database, Iter};
-use crate::github::discussions::{
+use crate::api::Discussion;
+use crate::outbound::discussions::{
     DiscussionsRepositoryDiscussionsNodes, DiscussionsRepositoryDiscussionsNodesAnswer,
     DiscussionsRepositoryDiscussionsNodesAnswerAuthor,
     DiscussionsRepositoryDiscussionsNodesAnswerReplies,
@@ -18,7 +19,6 @@ use crate::github::discussions::{
     DiscussionsRepositoryDiscussionsNodesLabels, DiscussionsRepositoryDiscussionsNodesReactions,
     ReactionContent,
 };
-use crate::graphql::Discussion;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DiscussionDbSchema {

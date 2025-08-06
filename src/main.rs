@@ -1,8 +1,8 @@
+mod api;
 mod checkout;
 mod database;
-mod github;
 mod google;
-mod graphql;
+mod outbound;
 mod settings;
 mod web;
 
@@ -39,7 +39,7 @@ async fn main() -> Result<()> {
 
     // Fetches issues and pull requests from GitHub every hour, and stores them
     // in the database.
-    task::spawn(github::fetch_periodically(
+    task::spawn(outbound::fetch_periodically(
         Arc::clone(&repositories),
         settings.certification.token,
         time::Duration::from_secs(ONE_HOUR),
@@ -53,7 +53,7 @@ async fn main() -> Result<()> {
         settings.certification.ssh,
     ));
 
-    let schema = graphql::schema(database);
+    let schema = api::schema(database);
 
     web::serve(schema, settings.web.address, &args.key, &args.cert).await;
     Ok(())

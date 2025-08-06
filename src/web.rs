@@ -3,7 +3,7 @@ use std::{convert::Infallible, net::SocketAddr, path::Path};
 use async_graphql::http::{playground_source, GraphQLPlaygroundConfig};
 use warp::{http::Response as HttpResponse, Filter};
 
-use crate::graphql::Schema;
+use crate::api::Schema;
 
 pub(super) async fn serve(schema: Schema, socketaddr: SocketAddr, key: &Path, cert: &Path) {
     let filter = async_graphql_warp::graphql(schema).and_then(
