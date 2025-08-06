@@ -1,4 +1,5 @@
 mod discussion;
+pub(crate) mod discussion_stat;
 pub(crate) mod issue;
 pub(crate) mod issue_stat;
 pub(crate) mod pull_request;
@@ -28,12 +29,13 @@ pub(crate) struct Query(
     issue::IssueQuery,
     pull_request::PullRequestQuery,
     issue_stat::IssueStatQuery,
+    discussion_stat::DiscussionStatQuery,
     discussion::DiscussionQuery,
 );
 
 pub(crate) type Schema = async_graphql::Schema<Query, EmptyMutation, EmptySubscription>;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, PartialOrd)]
 pub(crate) struct DateTimeUtc(Timestamp);
 
 #[Scalar]

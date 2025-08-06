@@ -7,7 +7,7 @@ use async_graphql::{
 };
 
 use crate::{
-    api,
+    api::{self, DateTimeUtc},
     database::{self, Database, DiscussionDbSchema, TryFromKeyValue},
     outbound::discussions::ReactionContent,
 };
@@ -15,12 +15,13 @@ use crate::{
 scalar!(ReactionContent);
 
 #[derive(SimpleObject)]
-pub struct Discussion {
-    owner: String,
-    repo: String,
-    number: i32,
-    title: String,
-    author: String,
+pub(crate) struct Discussion {
+    pub(crate) owner: String,
+    pub(crate) repo: String,
+    pub(crate) number: i32,
+    pub(crate) title: String,
+    pub(crate) author: String,
+    pub(crate) created_at: DateTimeUtc,
 }
 
 impl Discussion {
@@ -31,6 +32,7 @@ impl Discussion {
             number,
             title: schema.title,
             author: schema.author,
+            created_at: DateTimeUtc(schema.created_at),
         }
     }
 }
@@ -79,6 +81,8 @@ impl fmt::Display for Discussion {
 
 #[cfg(test)]
 mod tests {
+    use jiff::Timestamp;
+
     use crate::{
         api::TestSchema,
         database::{
@@ -110,30 +114,30 @@ mod tests {
     #[tokio::test]
     async fn discussions_first() {
         let schema = TestSchema::new();
-        let date = "2025/06/05".to_string();
+        let date = "2025-06-05T00:00:00Z".parse::<Timestamp>().unwrap();
         let discussions = vec![DiscussionDbSchema {
             number: 123,
             title: "How to use this with API?".to_string(),
             author: "alice".to_string(),
             body: "I'm trying to test this API in my project.".to_string(),
             url: "https://github.com/sample/sample/discussions/123".to_string(),
-            created_at: date.clone(),
-            updated_at: date.clone(),
+            created_at: date,
+            updated_at: date,
             is_answered: true,
-            answer_chosen_at: Some(date.clone()),
+            answer_chosen_at: Some(date),
             answer: Some(Answer {
                 body: "You can use the OpenAI API by creating an API key and using the endpoint."
                     .to_string(),
-                created_at: date.clone(),
-                updated_at: date.clone(),
+                created_at: date,
+                updated_at: date,
                 url: "https://github.com/sample/sample/discussions/123#answer".to_string(),
                 author: "bob".to_string(),
                 replies: Replies {
                     total_count: 1,
                     nodes: vec![Reply {
                         body: "Thanks! That helped.".to_string(),
-                        created_at: date.clone(),
-                        updated_at: date.clone(),
+                        created_at: date,
+                        updated_at: date,
                         is_answer: false,
                         author: "alice".to_string(),
                     }],
@@ -150,23 +154,23 @@ mod tests {
                 nodes: vec![Comment {
                     body: "Did you check the API docs?".to_string(),
                     author: "charlie".to_string(),
-                    created_at: date.clone(),
-                    updated_at: date.clone(),
+                    created_at: date,
+                    updated_at: date,
                     deleted_at: None,
                     is_answer: false,
                     is_minimized: false,
                     last_edited_at: None,
-                    published_at: Some(date.clone()),
+                    published_at: Some(date),
                     reactions: Reactions {
                         total_count: 2,
                         nodes: vec![
                             Reaction {
                                 content: ReactionContent::Other("+1".to_string()),
-                                created_at: date.clone(),
+                                created_at: date,
                             },
                             Reaction {
                                 content: ReactionContent::Other("heart".to_string()),
-                                created_at: date.clone(),
+                                created_at: date,
                             },
                         ],
                     },
@@ -174,8 +178,8 @@ mod tests {
                         total_count: 1,
                         nodes: vec![Reply {
                             body: "Yes, but I still had some confusion.".to_string(),
-                            created_at: date.clone(),
-                            updated_at: date.clone(),
+                            created_at: date,
+                            updated_at: date,
                             is_answer: false,
                             author: "alice".to_string(),
                         }],
@@ -188,7 +192,7 @@ mod tests {
                 total_count: 4,
                 nodes: vec![Reaction {
                     content: ReactionContent::Other("thumbs_up".to_string()),
-                    created_at: date.clone(),
+                    created_at: date,
                 }],
             },
         }];
