@@ -8,8 +8,8 @@ use std::{
 use anyhow::Result;
 use qdrant_client::{
     qdrant::{
-        CreateCollectionBuilder, Distance, PointStruct, QueryPointsBuilder, UpsertPointsBuilder,
-        VectorParamsBuilder,
+        CreateCollectionBuilder, Distance, Filter, PointStruct, QueryPointsBuilder,
+        UpsertPointsBuilder, VectorParamsBuilder,
     },
     Payload, Qdrant,
 };
@@ -33,7 +33,7 @@ static COLLECTION_NAME: &str = "lang_graph";
 
 static VECTOR_STORE: OnceCell<Arc<QdrantVectorStore<EmbeddingModel>>> = OnceCell::const_new();
 
-pub async fn get_storage() -> Result<Arc<QdrantVectorStore<EmbeddingModel>>> {
+pub async fn get_storage(filter: Option<Filter>) -> Result<Arc<QdrantVectorStore<EmbeddingModel>>> {
     let vector_store_arc = VECTOR_STORE
         .get_or_try_init(|| async {
             info!("Initializing Qdrant client and VectorStore for the first time...");
@@ -56,14 +56,13 @@ pub async fn get_storage() -> Result<Arc<QdrantVectorStore<EmbeddingModel>>> {
 
             let llm = Client::new();
             let model = llm.embedding_model(NOMIC_EMBED_TEXT);
+            let mut query_builder = QueryPointsBuilder::new(COLLECTION_NAME).with_payload(true);
 
-            let vector_store = QdrantVectorStore::new(
-                client,
-                model,
-                QueryPointsBuilder::new(COLLECTION_NAME)
-                    .with_payload(true)
-                    .build(),
-            );
+            if let Some(filter) = filter {
+                query_builder = query_builder.filter(filter);
+            }
+
+            let vector_store = QdrantVectorStore::new(client, model, query_builder.build());
 
             Result::<_>::Ok(Arc::new(vector_store))
         })
@@ -93,7 +92,7 @@ impl fmt::Display for DocumentType {
             DocumentType::PullRequest => "PullRequest",
             DocumentType::Discussion => "Discussion",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -156,7 +155,7 @@ pub async fn add_documents_in_vector_store(documents: Vec<GithubDocument>) -> an
         .map(|doc| generate_deterministic_uuid(&doc.id));
     let payloads = documents.iter().map(|d| {
         json!({
-            "page_conetent": d.page_content,
+            "page_content": d.page_content,
             "metadata": d.metadata,
         })
     });
@@ -164,6 +163,7 @@ pub async fn add_documents_in_vector_store(documents: Vec<GithubDocument>) -> an
         .document(&texts)?
         .build()
         .await?;
+    #[allow(clippy::cast_possible_truncation)]
     let vectors: Vec<Vec<f32>> = embeddings
         .into_iter()
         .flat_map(|(_, embedding)| {

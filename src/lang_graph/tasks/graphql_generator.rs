@@ -21,10 +21,11 @@ impl GraphQLGeneratorTask {
     pub fn new() -> Self {
         let client = providers::ollama::Client::new();
         let today = Zoned::now().to_string();
-        let schema_doc = fs::read_to_string("src/lang_graph/schema.graphql").unwrap_or_else(|_| {
-            info!("Failed to read schema.graphql, using empty schema");
-            String::new()
-        });
+        let schema_doc =
+            fs::read_to_string("src/lang_graph/schema2.graphql").unwrap_or_else(|_| {
+                info!("Failed to read schema.graphql, using empty schema");
+                String::new()
+            });
         let agent = client
             .agent("llama3.1:8b")
             .preamble(

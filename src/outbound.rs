@@ -7,8 +7,7 @@ use reqwest::{Client, RequestBuilder, Response};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tokio::time;
-use tracing::error;
-use tracing::info;
+use tracing::{error, info};
 
 pub use self::pull_requests::{PullRequestReviewState, PullRequestState as PRPullRequestState};
 use crate::database::DiscussionDbSchema;
@@ -407,17 +406,17 @@ where
             metadata.insert("author".to_string(), json!(item.get_author()));
             GithubDocument {
                 id: format!("{}/{}/{}", &owner, &name, item.get_number()),
-                page_content: serde_json::to_string(item).unwrap_or_default(),
+                page_content: serde_json::to_string_pretty(item).unwrap(),
                 metadata,
             }
         })
         .collect::<Vec<GithubDocument>>();
 
     let data = vector_db::add_documents_in_vector_store(docs.clone()).await;
-    match data {
-        Ok(_) => {}
-        Err(e) => error!("{e}"),
+    if let Err(e) = data {
+        error!("{e}");
     }
+
     info!("[RAG] Success Appending {} {}", docs.len(), doc_type);
     Ok(())
 }

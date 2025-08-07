@@ -1,6 +1,14 @@
+use anyhow::Result;
 use async_trait::async_trait;
 use graph_flow::{Context, GraphError, NextAction, Task, TaskResult};
-use rig::vector_store::VectorStoreIndexDyn;
+use qdrant_client::qdrant::{Condition, Filter};
+use rig::{
+    agent::Agent,
+    client::CompletionClient,
+    completion::Chat,
+    providers::{self, ollama::CompletionModel},
+    vector_store::VectorStoreIndexDyn,
+};
 use tracing::{error, info};
 
 use crate::{
@@ -11,10 +19,51 @@ use crate::{
     vector_db::get_storage,
 };
 
-pub struct VectorSearchTask;
+pub struct VectorSearchTask {
+    agent: Agent<CompletionModel>,
+}
 impl VectorSearchTask {
     pub fn new() -> Self {
-        Self {}
+        let client = providers::ollama::Client::new();
+        let agent = client
+            .agent("llama3.1:8b")
+            .preamble(
+                r#"You are an AI assistant that specializes in parsing user queries to extract structured data for filtering GitHub information.
+                Your sole function is to analyze the user's query and return a JSON object containing the appropriate filters based on the schema provided below.
+
+                ---
+                **FILTER SCHEMA:**
+
+                You can only use the following keys. The values must match the specified type.
+
+                - `metadata.type`: (String) Must be one of "Issue", "Pull Request", or "Discussion".
+                - `metadata.repo`: (String) The repository in "owner/name" format.
+                - `metadata.author`: (String) The GitHub username of the author.
+                - `metadata.number`: (Integer) The number of an issue or pull request or discussion.
+
+                ---
+                **OUTPUT RULES:**
+                Respond ONLY with a JSON object in the following format:
+                1.  The output MUST be a single, valid JSON object.
+                2.  If filterable criteria are found in the query, use the keys from the FILTER SCHEMA.
+                3.  If NO filterable criteria are found, you MUST output exactly: `{"no_filter": true}`
+                4.  Do NOT include any explanations, markdown formatting (like ```json), or any text outside of the JSON object itself.
+
+                ---
+                **EXAMPLES:**
+
+                - User Query: `show me john's issues`
+                - Your Output: `{"metadata.type": "Issue", "metadata.author": "john"}`
+
+                - User Query: `What is the status of PR #123 in the aicers/dashboard repo?`
+                - Your Output: `{"metadata.type": "Pull Request", "metadata.number": 123, "metadata.repo": "aicers/dashboard"}`
+
+                - User Query: `what is vector db?`
+                - Your Output: `{"no_filter": true}`
+                "#,
+            )
+            .build();
+        Self { agent }
     }
 }
 
@@ -47,16 +96,35 @@ impl Task for VectorSearchTask {
 
         info!("VectorSearchTask started");
 
-        let vector_store = get_storage().await?;
         let mut segement_vector_results = Vec::new();
 
         for segment in &qualitative_segments {
-            info!("Processing segment: {:?}", segment);
-            info!("Query text: {}", segment.enhanced);
+            info!("Processing segment: {:?}", segment.enhanced);
 
-            info!("Performing vector search...");
-            let results = match vector_store.top_n(&segment.enhanced, 10).await {
-                Ok(r) => r,
+            let filter = self
+                .generate_filter(context.clone(), segment.clone())
+                .await?;
+
+            let vector_store = get_storage(filter.clone()).await?;
+            let search_results = vector_store.top_n(&segment.enhanced, 10).await;
+
+            let results = match search_results {
+                Ok(docs) if docs.is_empty() && filter.is_some() => {
+                    info!("Search with filter yielded 0 results. Retrying without filter...");
+                    let vector_store_no_filter = get_storage(None).await?;
+
+                    match vector_store_no_filter.top_n(&segment.enhanced, 10).await {
+                        Ok(result) => result,
+                        Err(e) => {
+                            error!("{e}");
+                            Vec::default()
+                        }
+                    }
+                }
+                Ok(docs) => {
+                    info!("Vector search successful. Found {} documents.", docs.len());
+                    docs
+                }
                 Err(e) => {
                     error!("Vector search error: {}", e);
                     return Err(GraphError::ContextError(format!(
@@ -64,8 +132,9 @@ impl Task for VectorSearchTask {
                     )));
                 }
             };
-            info!("Vector search returned {} results", results.len());
 
+            info!("Vector search returned {} results", results.len());
+            #[allow(clippy::cast_possible_truncation)]
             let vector_results: Vec<VectorSearchResult> = results
                 .into_iter()
                 .map(|(score, id, payload)| VectorSearchResult {
@@ -82,7 +151,11 @@ impl Task for VectorSearchTask {
 
             info!(
                 "Segment '{}' vector search results: {:?}",
-                segment.enhanced, vector_results
+                segment.enhanced,
+                serde_json::to_string_pretty(
+                    &serde_json::to_value(vector_results.clone()).unwrap()
+                )
+                .unwrap()
             );
             segement_vector_results.push((segment.clone(), vector_results));
         }
@@ -106,7 +179,65 @@ impl Task for VectorSearchTask {
                 "Vector search completed with {} results",
                 segement_vector_results.len()
             )),
-            NextAction::Continue, // or NextAction::Continue if you want to keep the flow going
+            NextAction::Continue,
         ))
+    }
+}
+
+impl VectorSearchTask {
+    async fn generate_filter(&self, context: Context, segment: Segment) -> Result<Option<Filter>> {
+        let chat_history = context.get_rig_messages().await;
+        let prompt = format!(
+            "Analyze this GitHub repository query: {}",
+            serde_json::to_string(&segment).unwrap_or_default()
+        );
+        let response = self
+            .agent
+            .chat(&prompt, chat_history)
+            .await
+            .map_err(|e| GraphError::TaskExecutionFailed(format!("LLM error: {e}")))?;
+
+        info!(response);
+        let generated_filter: serde_json::Value = serde_json::from_str(&response)
+            .map_err(|e| GraphError::TaskExecutionFailed(format!("JSON parse error: {e}")))?;
+
+        let filter = if generated_filter.get("no_filter").is_some() {
+            None
+        } else {
+            let mut conditions = Vec::new();
+
+            if let Some(doc_type) = generated_filter
+                .get("metadata.type")
+                .and_then(|v| v.as_str())
+            {
+                conditions.push(Condition::matches("metadata.type", doc_type.to_string()));
+            }
+            if let Some(author) = generated_filter
+                .get("metadata.author")
+                .and_then(|v| v.as_str())
+            {
+                conditions.push(Condition::matches("metadata.author", author.to_string()));
+            }
+            if let Some(repo) = generated_filter
+                .get("metadata.repo")
+                .and_then(|v| v.as_str())
+            {
+                let full_repo_name = if repo.contains('/') {
+                    repo.to_string()
+                } else {
+                    format!("aicers/{repo}")
+                };
+                conditions.push(Condition::matches("metadata.repo", full_repo_name));
+            }
+            if let Some(number) = generated_filter
+                .get("metadata.number")
+                .and_then(serde_json::Value::as_i64)
+            {
+                conditions.push(Condition::matches("metadata.number", number));
+            }
+            Some(Filter::must(conditions))
+        };
+
+        Ok(filter)
     }
 }

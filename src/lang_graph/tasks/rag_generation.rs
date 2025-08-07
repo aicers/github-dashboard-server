@@ -116,10 +116,14 @@ impl Task for RAGGenerationTask {
         info!("Context updated with RAG generation response");
         Ok(TaskResult::new(
             Some(format!(
-                "RAG generation completed: {} segments",
-                segment_rag_responses.len()
+                "RAG generation completed: {} segments, \nSegments: {} ",
+                segment_rag_responses.len(),
+                segment_rag_responses
+                    .iter()
+                    .map(|res| res.generated_response.clone())
+                    .collect::<String>()
             )),
-            NextAction::Continue,
+            NextAction::End,
         ))
     }
 }

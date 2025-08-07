@@ -69,7 +69,7 @@ impl Task for SegmentParserTask {
                 quantitative_segments.len(),
                 qualitative_segments.len()
             )),
-            NextAction::Continue,
+            NextAction::ContinueAndExecute,
         ))
     }
 }

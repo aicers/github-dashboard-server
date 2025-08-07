@@ -1,0 +1,277 @@
+
+type Comment {
+	id: String!
+	author: String!
+	body: String!
+	createdAt: DateTimeUtc!
+	updatedAt: DateTimeUtc!
+	repositoryName: String!
+	url: String!
+}
+
+type CommentConnection {
+	totalCount: Int!
+	nodes: [Comment!]!
+}
+
+scalar DateTimeUtc
+
+type Discussion {
+	owner: String!
+	repo: String!
+	number: Int!
+	title: String!
+	author: String!
+}
+
+type DiscussionConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [DiscussionEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Discussion!]!
+}
+
+"""
+An edge in a connection.
+"""
+type DiscussionEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Discussion!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+
+
+
+type Issue {
+	id: String!
+	owner: String!
+	repo: String!
+	number: Int!
+	title: String!
+	body: String!
+	state: IssueState!
+	author: String!
+	assignees: [String!]!
+	labels: [String!]!
+	comments: CommentConnection!
+	projectItems: ProjectV2ItemConnection!
+	subIssues: SubIssueConnection!
+	parent: ParentIssue
+	url: String!
+	closedByPullRequests: [PullRequestRef!]!
+	createdAt: DateTimeUtc!
+	updatedAt: DateTimeUtc!
+	closedAt: DateTimeUtc
+}
+
+type IssueConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [IssueEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Issue!]!
+}
+
+"""
+An edge in a connection.
+"""
+type IssueEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Issue!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+type IssueStat {
+	"""
+	The number of open issues.
+	"""
+	openIssueCount: Int!
+}
+
+input IssueStatFilter {
+	"""
+	Filter by assignee.
+	"""
+	assignee: String
+	"""
+	Filter by issue author.
+	"""
+	author: String
+	"""
+	Filter by repository name.
+	"""
+	repo: String
+	"""
+	Start of the creation datetime range. (inclusive)
+	Example format: "yyyy-MM-ddTHH:mm:ssZ"
+	"""
+	begin: DateTimeUtc
+	"""
+	End of the creation datetime range. (exclusive)
+	Example format: "yyyy-MM-ddTHH:mm:ssZ"
+	"""
+	end: DateTimeUtc
+}
+
+scalar IssueState
+
+"""
+Information about pagination in a connection
+"""
+type PageInfo {
+	"""
+	When paginating backwards, are there more items?
+	"""
+	hasPreviousPage: Boolean!
+	"""
+	When paginating forwards, are there more items?
+	"""
+	hasNextPage: Boolean!
+	"""
+	When paginating backwards, the cursor to continue.
+	"""
+	startCursor: String
+	"""
+	When paginating forwards, the cursor to continue.
+	"""
+	endCursor: String
+}
+
+type ParentIssue {
+	id: String!
+	number: Int!
+	title: String!
+}
+
+type ProjectV2Item {
+	id: String!
+	todoStatus: String
+	todoPriority: String
+	todoSize: String
+	todoInitiationOption: String
+	todoPendingDays: Float
+}
+
+type ProjectV2ItemConnection {
+	totalCount: Int!
+	nodes: [ProjectV2Item!]!
+}
+
+type PullRequest {
+	owner: String!
+	repo: String!
+	number: Int!
+	title: String!
+	assignees: [String!]!
+	reviewers: [String!]!
+}
+
+type PullRequestConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [PullRequestEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [PullRequest!]!
+}
+
+"""
+An edge in a connection.
+"""
+type PullRequestEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: PullRequest!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+type PullRequestRef {
+	number: Int!
+	state: PullRequestState!
+	author: String!
+	createdAt: DateTimeUtc!
+	updatedAt: DateTimeUtc!
+	closedAt: DateTimeUtc
+	url: String!
+}
+
+scalar PullRequestState
+
+"""
+A set of queries defined in the schema.
+
+This is exposed only for [`Schema`], and not used directly.
+"""
+type Query {
+	issues(after: String, before: String, first: Int, last: Int): IssueConnection!
+	pullRequests(after: String, before: String, first: Int, last: Int): PullRequestConnection!
+	issueStat(filter: IssueStatFilter!): IssueStat!
+	discussions(after: String, before: String, first: Int, last: Int): DiscussionConnection!
+	query(query: String!): RagResponse!
+}
+
+type RagResponse {
+	query: String!
+	answer: String!
+	timestamp: String
+}
+
+
+type SubIssue {
+	id: String!
+	number: Int!
+	title: String!
+	state: IssueState!
+	author: String!
+	assignees: [String!]!
+	createdAt: DateTimeUtc!
+	updatedAt: DateTimeUtc!
+	closedAt: DateTimeUtc
+}
+
+type SubIssueConnection {
+	totalCount: Int!
+	nodes: [SubIssue!]!
+}
+
+directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+schema {
+	query: Query
+}
