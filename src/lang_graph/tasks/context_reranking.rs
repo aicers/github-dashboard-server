@@ -23,25 +23,21 @@ impl ContextRerankTask {
         let agent = client
             .agent("llama3.1:8b")
             .preamble(
-                r"You are a context reranking specialist. Given a user query and a list of search results, rerank them by relevance.
-                - Your response must be a raw JSON array of objects.
-                - Do NOT wrap the response in triple backticks (```), markdown, or code block.
+                r"You are a context reranking specialist. Your task is to reorder a given JSON array of documents based on their relevance to a user's query.
+                You will receive a user query and a JSON array of documents. Your goal is to return the exact same array, with the documents rearranged from most relevant to least relevant.
+                CRITICAL INSTRUCTIONS:
+                - Your response MUST be the reordered JSON array of the original documents.
+                - Do NOT add, remove, or modify any fields within the document objects.
+                - Do NOT add new fields like a score. You are only changing the order of the objects.
+                - Your output must be only the raw JSON array.
+                - Do NOT wrap the response in triple backticks (```), markdown, or any other formatting.
                 - Do NOT include any text, explanation, or commentary.
-                - Just output a valid JSON array as plain text.
-
-                Consider:
-                1. Direct relevance to the query
-                2. Content quality and completeness
-                3. Recency (newer content may be more relevant)
-                4. Authority (official documentation, maintainer comments)
-
-                Format your response as a JSON array of objects, each containing:
-
-                - `id`: Unique identifier for the context
-                - `score`: Relevance score (higher is better)
-                - `content`: The content of the context
-                - `metadata`: Additional metadata (e.g., source, date)
-                Ensure the response is well-structured and easy to parse.
+                To determine the best order, consider:
+                - Direct Relevance: How closely the document's content matches the user query's intent.
+                - Content Quality: How complete and informative the document is.
+                - Recency: Newer content may be more relevant.
+                - Source Authority: Official documentation or comments from project maintainers are generally more authoritative.
+                Simply reorder the provided documents and output the resulting JSON array.
                 "
             )
             .build();
@@ -94,15 +90,21 @@ impl Task for ContextRerankTask {
             })?;
 
             info!("Reranked response: {}", response);
-            // pretty_log("Reranked Response", &response);
 
-            let reranked: Vec<VectorSearchResult> =
-                serde_json::from_str(&response).map_err(|e| {
-                    error!("Failed to parse reranked JSON: {}", e);
-                    GraphError::ContextError(format!("JSON parse error: {e}"))
-                })?;
+            let reranked = serde_json::from_str(&response).map_err(|e| {
+                error!("Failed to parse reranked JSON: {}", e);
+                GraphError::ContextError(format!("JSON parse error: {e}"))
+            });
 
-            reranked_segments.push((segment, reranked));
+            match reranked {
+                Ok(r) => {
+                    reranked_segments.push((segment, r));
+                }
+                Err(e) => {
+                    error!("{e}");
+                    reranked_segments.push((segment, results));
+                }
+            }
         }
         context
             .set(session_keys::RERANKED_CONTEXTS, reranked_segments.clone())
@@ -116,7 +118,7 @@ impl Task for ContextRerankTask {
                 "Context reranking completed for {} segments.",
                 reranked_segments.len()
             )),
-            NextAction::Continue,
+            NextAction::ContinueAndExecute,
         ))
     }
 }

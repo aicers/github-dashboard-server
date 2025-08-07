@@ -6,4 +6,5 @@ pub(crate) mod rag_generation;
 pub(crate) mod response_formatter;
 pub(crate) mod segment_parser;
 pub(crate) mod statistics_response;
+pub(crate) mod type_validation;
 pub(crate) mod vector_search;

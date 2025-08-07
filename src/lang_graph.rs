@@ -7,6 +7,7 @@ pub mod utils;
 use std::{any::type_name, sync::Arc};
 
 use graph_flow::{FlowRunner, Graph, InMemorySessionStorage, Session, SessionStorage};
+use tracing::error;
 
 use crate::lang_graph::tasks::query_enhancement::QueryEnhancementTask;
 
@@ -40,19 +41,23 @@ impl GitHubRAGSystem {
         let flow_runner = FlowRunner::new(self.graph.clone(), self.session_storage.clone());
 
         loop {
-            let result = flow_runner.run(&session_id).await?;
+            let result = flow_runner.run(&session_id).await;
+            let session = self.session_storage.get(&session_id).await?.unwrap();
 
-            match result.status {
-                graph_flow::ExecutionStatus::Completed => {
-                    return Ok(result.response.unwrap_or_default());
-                }
-                graph_flow::ExecutionStatus::Error(_) => {
-                    continue;
-                }
-                graph_flow::ExecutionStatus::WaitingForInput => {
-                    continue;
-                }
-                graph_flow::ExecutionStatus::Paused { .. } => continue,
+            match result {
+                Ok(result) => match result.status {
+                    graph_flow::ExecutionStatus::Completed => {
+                        session.context.clear().await;
+                        return Ok(result.response.unwrap_or_default());
+                    }
+                    graph_flow::ExecutionStatus::Error(e) => {
+                        error!("{}", &e);
+                        session.context.set("Error_Reason", e).await;
+                    }
+                    graph_flow::ExecutionStatus::WaitingForInput
+                    | graph_flow::ExecutionStatus::Paused { .. } => {}
+                },
+                Err(e) => error!("{e}"),
             }
         }
     }
