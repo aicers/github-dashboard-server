@@ -76,7 +76,7 @@ In the configuration file, you can specify the following options:
 
 | Field     | Description                                     | Required | Default          |
 | --------- | ----------------------------------------------- | -------- | ---------------- |
-| `db_path` | Folder where the sled database files are stored | No       | github-dashboard |
+| `db_path` | Folder where the fjall database files are stored | No       | github-dashboard |
 
 <!-- markdownlint-enable MD013-->
 

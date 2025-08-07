@@ -117,7 +117,7 @@ impl Database {
     ) -> Result<()> {
         for item in resp {
             let keystr: String = format!("{owner}/{repo}#{}", item.number);
-            Database::insert(&keystr, item, &self.discussion_tree)?;
+            Database::insert(&keystr, item, &self.discussion_partition)?;
         }
         Ok(())
     }
@@ -125,9 +125,9 @@ impl Database {
     pub(crate) fn discussions(&self, start: Option<&[u8]>, end: Option<&[u8]>) -> Iter<Discussion> {
         let start = start.unwrap_or(b"\x00");
         if let Some(end) = end {
-            self.discussion_tree.range(start..end).into()
+            Iter::new(self.discussion_partition.range(start..end))
         } else {
-            self.discussion_tree.range(start..).into()
+            Iter::new(self.discussion_partition.range(start..))
         }
     }
 }

@@ -197,7 +197,7 @@ pub(super) async fn fetch_periodically(
                             if let Err(error) =
                                 db.insert_issues(resp, &repoinfo.owner, &repoinfo.name)
                             {
-                                error!("Problem while insert Sled Database. {}", error);
+                                error!("Problem while insert Fjall Database. {}", error);
                             }
                         }
                         break;
@@ -218,7 +218,7 @@ pub(super) async fn fetch_periodically(
                             if let Err(error) =
                                 db.insert_pull_requests(resp, &repoinfo.owner, &repoinfo.name)
                             {
-                                error!("Problem while insert Sled Database. {}", error);
+                                error!("Problem while insert Fjall Database. {}", error);
                             }
                         }
                         break;
@@ -238,7 +238,7 @@ pub(super) async fn fetch_periodically(
                         if let Err(error) =
                             db.insert_discussions(resps, &repoinfo.owner, &repoinfo.name)
                         {
-                            error!("Problem while insert Sled Database. {}", error);
+                            error!("Problem while insert Fjall Database. {}", error);
                         }
                         break;
                     }
