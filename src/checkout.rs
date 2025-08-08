@@ -21,7 +21,7 @@ const REMOTE_BASE_URL: &str = "git@github.com";
 const ENV_HOME: &str = "HOME";
 const ENV_SSH_PASSPHRASE: &str = "SSH_PASSPHRASE";
 
-fn callbacks(ssh: &str) -> Result<RemoteCallbacks> {
+fn callbacks(ssh: &str) -> Result<RemoteCallbacks<'_>> {
     let mut callbacks = RemoteCallbacks::new();
     let ssh_path = Path::new(&var(ENV_HOME)?).join(ssh);
     let passphrase = std::env::var(ENV_SSH_PASSPHRASE).ok();
@@ -36,7 +36,7 @@ fn callbacks(ssh: &str) -> Result<RemoteCallbacks> {
     Ok(callbacks)
 }
 
-fn fetchoption(ssh: &str) -> Result<FetchOptions> {
+fn fetchoption(ssh: &str) -> Result<FetchOptions<'_>> {
     let mut fo = git2::FetchOptions::new();
     fo.remote_callbacks(callbacks(ssh)?);
     Ok(fo)
