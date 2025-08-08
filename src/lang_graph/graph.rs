@@ -2,17 +2,20 @@ use std::sync::Arc;
 
 use graph_flow::{GraphBuilder, Task};
 
-use crate::lang_graph::{
-    session_keys,
-    tasks::{
-        context_reranking, graphql_executor, graphql_generator, query_enhancement, rag_generation,
-        response_formatter, segment_parser, statistics_response, type_validation, vector_search,
+use crate::{
+    database::Database,
+    lang_graph::{
+        session_keys,
+        tasks::{
+            context_reranking, graphql_executor, graphql_generator, query_enhancement,
+            rag_generation, response_formatter, segment_parser, statistics_response,
+            type_validation, vector_search,
+        },
     },
 };
 
 #[allow(clippy::unused_async)]
-pub async fn build_rag_graph() -> anyhow::Result<Arc<graph_flow::Graph>> {
-    // 태스크 인스턴스 생성
+pub async fn build_rag_graph(database: Database) -> anyhow::Result<Arc<graph_flow::Graph>> {
     let query_enhancement = Arc::new(query_enhancement::QueryEnhancementTask::new());
     let segment_parser = Arc::new(segment_parser::SegmentParserTask::new());
     let type_validation = Arc::new(type_validation::TypeValidationTask::new());
@@ -20,7 +23,7 @@ pub async fn build_rag_graph() -> anyhow::Result<Arc<graph_flow::Graph>> {
     let context_reranking = Arc::new(context_reranking::ContextRerankTask::new());
     let rag_generation = Arc::new(rag_generation::RAGGenerationTask::new());
     let graphql_generator = Arc::new(graphql_generator::GraphQLGeneratorTask::new());
-    let graphql_executor = Arc::new(graphql_executor::GraphQLExecutorTask::new());
+    let graphql_executor = Arc::new(graphql_executor::GraphQLExecutorTask::new(database));
     let statistics_response = Arc::new(statistics_response::StatisticsResponseTask::new());
     let response_formatter = Arc::new(response_formatter::ResponseFormatterTask::new());
 

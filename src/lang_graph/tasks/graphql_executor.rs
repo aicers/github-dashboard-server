@@ -1,25 +1,27 @@
 use async_trait::async_trait;
-use graph_flow::{Context, NextAction, Task, TaskResult};
+use graph_flow::{NextAction, Task, TaskResult};
 use tracing::info;
 
-use crate::lang_graph::session_keys;
-pub struct GraphQLExecutorTask;
-
+use crate::{database::Database, lang_graph::session_keys};
+pub struct GraphQLExecutorTask {
+    database: Database,
+}
 impl GraphQLExecutorTask {
-    pub fn new() -> Self {
-        Self
+    pub fn new(database: Database) -> Self {
+        Self { database }
     }
 }
 
 #[async_trait]
 impl Task for GraphQLExecutorTask {
-    async fn run(&self, context: Context) -> graph_flow::Result<TaskResult> {
+    async fn run(&self, context: graph_flow::Context) -> graph_flow::Result<TaskResult> {
         let session_id = context
             .get::<String>("session_id")
             .await
             .unwrap_or_else(|| "unknown".to_string());
 
         info!("GraphQLExecutorTask started. Session: {}", session_id);
+        let schema = crate::api::schema_origin(self.database.clone());
 
         let graphql_query: String = context
             .get_sync(session_keys::GRAPHQL_QUERY)
@@ -35,21 +37,14 @@ impl Task for GraphQLExecutorTask {
             ));
         }
 
-        // TODO: 실제 GitHub GraphQL API 호출 로직
-        // 현재는 모의 실행
-        let mock_result = serde_json::json!({
-            "data": {
-                "repository": {
-                    "issues": {
-                        "totalCount": 42,
-                        "nodes": []
-                    }
-                }
-            }
-        });
+        let execution_result = schema.execute(&graphql_query).await;
+        info!("{:?}", execution_result);
 
         context
-            .set(session_keys::GRAPHQL_RESULT, mock_result.clone())
+            .set(
+                session_keys::GRAPHQL_RESULT,
+                execution_result.data.to_string(),
+            )
             .await;
         context
             .add_assistant_message("Executed GraphQL query against GitHub API".to_string())

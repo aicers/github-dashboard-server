@@ -80,6 +80,12 @@ pub(crate) fn schema(database: Database, rag: GitHubRAGSystem) -> Schema {
         .finish()
 }
 
+pub(crate) fn schema_origin(database: Database) -> Schema {
+    Schema::build(Query::default(), EmptyMutation, EmptySubscription)
+        .data(database)
+        .finish()
+}
+
 fn load_connection<N, I>(
     ctx: &Context<'_>,
     iter_builder: impl Fn(&Database, Option<&[u8]>, Option<&[u8]>) -> I,
@@ -164,7 +170,7 @@ impl TestSchema {
     async fn new() -> Self {
         let db_dir = tempfile::tempdir().unwrap();
         let db = Database::connect(db_dir.path()).unwrap();
-        let rag = GitHubRAGSystem::new().await.unwrap();
+        let rag = GitHubRAGSystem::new(db.clone()).await.unwrap();
         let schema = schema(db.clone(), rag);
         Self {
             _dir: db_dir,

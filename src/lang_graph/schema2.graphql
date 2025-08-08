@@ -1,277 +1,523 @@
-
-type Comment {
-	id: String!
-	author: String!
-	body: String!
-	createdAt: DateTimeUtc!
-	updatedAt: DateTimeUtc!
-	repositoryName: String!
-	url: String!
-}
-
-type CommentConnection {
-	totalCount: Int!
-	nodes: [Comment!]!
-}
-
-scalar DateTimeUtc
-
-type Discussion {
-	owner: String!
-	repo: String!
-	number: Int!
-	title: String!
-	author: String!
-}
-
-type DiscussionConnection {
-	"""
-	Information to aid in pagination.
-	"""
-	pageInfo: PageInfo!
-	"""
-	A list of edges.
-	"""
-	edges: [DiscussionEdge!]!
-	"""
-	A list of nodes.
-	"""
-	nodes: [Discussion!]!
+"""
+A GraphQL schema for querying information about GitHub repositories, including issues, pull requests, and discussions.
+It is designed to be used by an LLM to answer quantitative and qualitative questions.
+"""
+schema {
+  query: Query
 }
 
 """
-An edge in a connection.
+The root type for all GraphQL queries. This is the entry point for fetching data.
 """
-type DiscussionEdge {
-	"""
-	The item at the end of the edge
-	"""
-	node: Discussion!
-	"""
-	A cursor for use in pagination
-	"""
-	cursor: String!
+type Query {
+  """
+  Fetches a paginated list of issues. Use 'first' and 'after' for forward pagination.
+  """
+  issues(
+    """
+    Returns the first n items from the list.
+    """
+    first: Int
+    """
+    Returns the items that come after the specified cursor.
+    """
+    after: String
+    """
+    Returns the last n items from the list.
+    """
+    last: Int
+    """
+    Returns the items that come before the specified cursor.
+    """
+    before: String
+  ): IssueConnection!
+
+  """
+  Fetches a paginated list of pull requests.
+  """
+  pullRequests(
+    first: Int
+    after: String
+    last: Int
+    before: String
+  ): PullRequestConnection!
+
+  """
+  Calculates statistics for issues based on a filter. This is for quantitative analysis.
+  The 'filter' argument is required.
+  """
+  issueStat(filter: IssueStatFilter!): IssueStat!
+
+  """
+  Fetches a paginated list of discussions.
+  """
+  discussions(
+    first: Int
+    after: String
+    last: Int
+    before: String
+  ): DiscussionConnection!
+
+  """
+  Performs a natural language query using the RAG system to get a qualitative answer.
+  This is the main entry point for asking general questions.
+  """
+  query(
+    """
+    The user's question in natural language.
+    """
+    query: String!
+  ): RagResponse!
 }
 
-
-
-
+"""
+Represents a GitHub Issue, which is a primary unit for tracking tasks, enhancements, and bugs.
+"""
 type Issue {
-	id: String!
-	owner: String!
-	repo: String!
-	number: Int!
-	title: String!
-	body: String!
-	state: IssueState!
-	author: String!
-	assignees: [String!]!
-	labels: [String!]!
-	comments: CommentConnection!
-	projectItems: ProjectV2ItemConnection!
-	subIssues: SubIssueConnection!
-	parent: ParentIssue
-	url: String!
-	closedByPullRequests: [PullRequestRef!]!
-	createdAt: DateTimeUtc!
-	updatedAt: DateTimeUtc!
-	closedAt: DateTimeUtc
-}
-
-type IssueConnection {
-	"""
-	Information to aid in pagination.
-	"""
-	pageInfo: PageInfo!
-	"""
-	A list of edges.
-	"""
-	edges: [IssueEdge!]!
-	"""
-	A list of nodes.
-	"""
-	nodes: [Issue!]!
+  """
+  A unique identifier for the issue.
+  """
+  id: String!
+  """
+  The owner of the repository the issue belongs to.
+  """
+  owner: String!
+  """
+  The name of the repository the issue belongs to.
+  """
+  repo: String!
+  """
+  The issue number, unique within the repository.
+  """
+  number: Int!
+  """
+  The title of the issue.
+  """
+  title: String!
+  """
+  The main description body of the issue.
+  """
+  body: String!
+  """
+  The current state of the issue (e.g., OPEN, CLOSED).
+  """
+  state: IssueState!
+  """
+  The username of the author who created the issue.
+  """
+  author: String!
+  """
+  A list of usernames assigned to this issue.
+  """
+  assignees: [String!]!
+  """
+  A list of labels attached to this issue (e.g., 'bug', 'enhancement').
+  """
+  labels: [String!]!
+  """
+  A list of comments associated with this issue.
+  """
+  comments: CommentConnection!
+  """
+  Project management items linked to this issue.
+  """
+  projectItems: ProjectV2ItemConnection!
+  """
+  A list of sub-issues related to this issue.
+  """
+  subIssues: SubIssueConnection!
+  """
+  If this is a sub-issue, this field points to its parent.
+  """
+  parent: ParentIssue
+  """
+  The URL to view the issue on GitHub.
+  """
+  url: String!
+  """
+  A list of pull requests that reference and may have closed this issue.
+  """
+  closedByPullRequests: [PullRequestRef!]!
+  """
+  The timestamp when the issue was created.
+  """
+  createdAt: DateTimeUtc!
+  """
+  The timestamp when the issue was last updated.
+  """
+  updatedAt: DateTimeUtc!
+  """
+  The timestamp when the issue was closed. Null if open.
+  """
+  closedAt: DateTimeUtc
 }
 
 """
-An edge in a connection.
+Represents a GitHub Pull Request, which is a proposal to merge code changes.
+"""
+type PullRequest {
+  """
+  The owner of the repository the pull request belongs to.
+  """
+  owner: String!
+  """
+  The name of the repository the pull request belongs to.
+  """
+  repo: String!
+  """
+  The pull request number, unique within the repository.
+  """
+  number: Int!
+  """
+  The title of the pull request.
+  """
+  title: String!
+  """
+  A list of usernames assigned to this pull request.
+  """
+  assignees: [String!]!
+  """
+  A list of usernames requested for review.
+  """
+  reviewers: [String!]!
+}
+
+"""
+Represents a GitHub Discussion, used for community conversations.
+"""
+type Discussion {
+  """
+  The owner of the repository the discussion belongs to.
+  """
+  owner: String!
+  """
+  The name of the repository the discussion belongs to.
+  """
+  repo: String!
+  """
+  The discussion number, unique within the repository.
+  """
+  number: Int!
+  """
+  The title of the discussion.
+  """
+  title: String!
+  """
+  The username of the author who created the discussion.
+  """
+  author: String!
+}
+
+"""
+Represents a single comment on an issue or pull request.
+"""
+type Comment {
+  """
+  A unique identifier for the comment.
+  """
+  id: String!
+  """
+  The username of the author who created the comment.
+  """
+  author: String!
+  """
+  The body content of the comment.
+  """
+  body: String!
+  """
+  The timestamp when the comment was created.
+  """
+  createdAt: DateTimeUtc!
+  """
+  The timestamp when the comment was last updated.
+  """
+  updatedAt: DateTimeUtc!
+  """
+  The full name of the repository where the comment was made.
+  """
+  repositoryName: String!
+  """
+  The URL to view the comment on GitHub.
+  """
+  url: String!
+}
+
+# --- Input Types ---
+
+"""
+Specifies criteria to filter issue statistics for the 'issueStat' query.
+"""
+input IssueStatFilter {
+  """
+  Filter by the username of the assignee.
+  """
+  assignee: String
+  """
+  Filter by the username of the issue's author.
+  """
+  author: String
+  """
+  Filter by the repository name (e.g., 'owner/repo').
+  """
+  repo: String
+  """
+  The start of the creation datetime range (inclusive).
+  Example format: "2025-08-08T00:00:00Z"
+  """
+  begin: DateTimeUtc
+  """
+  The end of the creation datetime range (exclusive).
+  Example format: "2025-08-09T00:00:00Z"
+  """
+  end: DateTimeUtc
+}
+
+# --- Connections and Edges (for Pagination) ---
+
+"""
+A paginated list of Issues, following the Relay cursor-based pagination spec.
+"""
+type IssueConnection {
+  """
+  Information to aid in pagination.
+  """
+  pageInfo: PageInfo!
+  """
+  A list of issue edges.
+  """
+  edges: [IssueEdge!]!
+  """
+  A list of the issue nodes themselves.
+  """
+  nodes: [Issue!]!
+}
+
+"""
+An edge in an IssueConnection, containing an issue and a cursor for pagination.
 """
 type IssueEdge {
-	"""
-	The item at the end of the edge
-	"""
-	node: Issue!
-	"""
-	A cursor for use in pagination
-	"""
-	cursor: String!
+  """
+  The Issue item.
+  """
+  node: Issue!
+  """
+  A cursor for use in pagination.
+  """
+  cursor: String!
 }
 
+"""
+A paginated list of Pull Requests.
+"""
+type PullRequestConnection {
+  """
+  Information to aid in pagination.
+  """
+  pageInfo: PageInfo!
+  """
+  A list of pull request edges.
+  """
+  edges: [PullRequestEdge!]!
+  """
+  A list of the pull request nodes themselves.
+  """
+  nodes: [PullRequest!]!
+}
+
+"""
+An edge in a PullRequestConnection.
+"""
+type PullRequestEdge {
+  """
+  The PullRequest item.
+  """
+  node: PullRequest!
+  """
+  A cursor for use in pagination.
+  """
+  cursor: String!
+}
+
+"""
+A paginated list of Discussions.
+"""
+type DiscussionConnection {
+  """
+  Information to aid in pagination.
+  """
+  pageInfo: PageInfo!
+  """
+  A list of discussion edges.
+  """
+  edges: [DiscussionEdge!]!
+  """
+  A list of the discussion nodes themselves.
+  """
+  nodes: [Discussion!]!
+}
+
+"""
+An edge in a DiscussionConnection.
+"""
+type DiscussionEdge {
+  """
+  The Discussion item.
+  """
+  node: Discussion!
+  """
+  A cursor for use in pagination.
+  """
+  cursor: String!
+}
+
+"""
+Information about pagination in a connection, as per the Relay spec.
+"""
+type PageInfo {
+  """
+  When paginating backwards, are there more items?
+  """
+  hasPreviousPage: Boolean!
+  """
+  When paginating forwards, are there more items?
+  """
+  hasNextPage: Boolean!
+  """
+  When paginating backwards, the cursor to continue from.
+  """
+  startCursor: String
+  """
+  When paginating forwards, the cursor to continue from.
+  """
+  endCursor: String
+}
+
+# --- Other Supporting Types ---
+
+"""
+Provides statistics about issues, typically after a filter has been applied.
+"""
 type IssueStat {
-	"""
-	The number of open issues.
-	"""
-	openIssueCount: Int!
+  """
+  The total number of open issues matching the filter.
+  """
+  openIssueCount: Int!
 }
 
-input IssueStatFilter {
-	"""
-	Filter by assignee.
-	"""
-	assignee: String
-	"""
-	Filter by issue author.
-	"""
-	author: String
-	"""
-	Filter by repository name.
-	"""
-	repo: String
-	"""
-	Start of the creation datetime range. (inclusive)
-	Example format: "yyyy-MM-ddTHH:mm:ssZ"
-	"""
-	begin: DateTimeUtc
-	"""
-	End of the creation datetime range. (exclusive)
-	Example format: "yyyy-MM-ddTHH:mm:ssZ"
-	"""
-	end: DateTimeUtc
+"""
+The response from a natural language query to the RAG system.
+"""
+type RagResponse {
+  """
+  The original query from the user.
+  """
+  query: String!
+  """
+  The AI-generated answer.
+  """
+  answer: String!
+  """
+  The timestamp of the response.
+  """
+  timestamp: String
 }
 
+"""
+A brief reference to a pull request, often used within an Issue context.
+"""
+type PullRequestRef {
+  number: Int!
+  state: PullRequestState!
+  author: String!
+  createdAt: DateTimeUtc!
+  updatedAt: DateTimeUtc!
+  closedAt: DateTimeUtc
+  url: String!
+}
+
+"""
+A list of comments. Note: This connection is not paginated.
+"""
+type CommentConnection {
+  """
+  The total number of comments.
+  """
+  totalCount: Int!
+  """
+  A list of the comment nodes.
+  """
+  nodes: [Comment!]!
+}
+
+"""
+A list of project items. Note: This connection is not paginated.
+"""
+type ProjectV2ItemConnection {
+  totalCount: Int!
+  nodes: [ProjectV2Item!]!
+}
+
+"""
+A list of sub-issues. Note: This connection is not paginated.
+"""
+type SubIssueConnection {
+  totalCount: Int!
+  nodes: [SubIssue!]!
+}
+
+"""
+Represents a project management item linked to an issue.
+"""
+type ProjectV2Item {
+  id: String!
+  todoStatus: String
+  todoPriority: String
+  todoSize: String
+  todoInitiationOption: String
+  todoPendingDays: Float
+}
+
+"""
+If an issue is a sub-task, this provides information about its parent.
+"""
+type ParentIssue {
+  id: String!
+  number: Int!
+  title: String!
+}
+
+"""
+Represents a sub-task of a parent issue.
+"""
+type SubIssue {
+  id: String!
+  number: Int!
+  title: String!
+  state: IssueState!
+  author: String!
+  assignees: [String!]!
+  createdAt: DateTimeUtc!
+  updatedAt: DateTimeUtc!
+  closedAt: DateTimeUtc
+}
+
+# --- Custom Scalars ---
+
+"""
+A date and time in UTC format, represented as an ISO 8601 string (e.g., "2025-08-08T16:12:00Z").
+"""
+scalar DateTimeUtc
+
+"""
+The state of an Issue, typically "OPEN" or "CLOSED".
+"""
 scalar IssueState
 
 """
-Information about pagination in a connection
+The state of a Pull Request, typically "OPEN", "CLOSED", or "MERGED".
 """
-type PageInfo {
-	"""
-	When paginating backwards, are there more items?
-	"""
-	hasPreviousPage: Boolean!
-	"""
-	When paginating forwards, are there more items?
-	"""
-	hasNextPage: Boolean!
-	"""
-	When paginating backwards, the cursor to continue.
-	"""
-	startCursor: String
-	"""
-	When paginating forwards, the cursor to continue.
-	"""
-	endCursor: String
-}
-
-type ParentIssue {
-	id: String!
-	number: Int!
-	title: String!
-}
-
-type ProjectV2Item {
-	id: String!
-	todoStatus: String
-	todoPriority: String
-	todoSize: String
-	todoInitiationOption: String
-	todoPendingDays: Float
-}
-
-type ProjectV2ItemConnection {
-	totalCount: Int!
-	nodes: [ProjectV2Item!]!
-}
-
-type PullRequest {
-	owner: String!
-	repo: String!
-	number: Int!
-	title: String!
-	assignees: [String!]!
-	reviewers: [String!]!
-}
-
-type PullRequestConnection {
-	"""
-	Information to aid in pagination.
-	"""
-	pageInfo: PageInfo!
-	"""
-	A list of edges.
-	"""
-	edges: [PullRequestEdge!]!
-	"""
-	A list of nodes.
-	"""
-	nodes: [PullRequest!]!
-}
-
-"""
-An edge in a connection.
-"""
-type PullRequestEdge {
-	"""
-	The item at the end of the edge
-	"""
-	node: PullRequest!
-	"""
-	A cursor for use in pagination
-	"""
-	cursor: String!
-}
-
-type PullRequestRef {
-	number: Int!
-	state: PullRequestState!
-	author: String!
-	createdAt: DateTimeUtc!
-	updatedAt: DateTimeUtc!
-	closedAt: DateTimeUtc
-	url: String!
-}
-
 scalar PullRequestState
 
-"""
-A set of queries defined in the schema.
-
-This is exposed only for [`Schema`], and not used directly.
-"""
-type Query {
-	issues(after: String, before: String, first: Int, last: Int): IssueConnection!
-	pullRequests(after: String, before: String, first: Int, last: Int): PullRequestConnection!
-	issueStat(filter: IssueStatFilter!): IssueStat!
-	discussions(after: String, before: String, first: Int, last: Int): DiscussionConnection!
-	query(query: String!): RagResponse!
-}
-
-type RagResponse {
-	query: String!
-	answer: String!
-	timestamp: String
-}
-
-
-type SubIssue {
-	id: String!
-	number: Int!
-	title: String!
-	state: IssueState!
-	author: String!
-	assignees: [String!]!
-	createdAt: DateTimeUtc!
-	updatedAt: DateTimeUtc!
-	closedAt: DateTimeUtc
-}
-
-type SubIssueConnection {
-	totalCount: Int!
-	nodes: [SubIssue!]!
-}
-
+# --- Standard Directives ---
 directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
 directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
-schema {
-	query: Query
-}

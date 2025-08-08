@@ -9,7 +9,7 @@ use std::{any::type_name, sync::Arc};
 use graph_flow::{FlowRunner, Graph, InMemorySessionStorage, Session, SessionStorage};
 use tracing::error;
 
-use crate::lang_graph::tasks::query_enhancement::QueryEnhancementTask;
+use crate::{database::Database, lang_graph::tasks::query_enhancement::QueryEnhancementTask};
 
 pub struct GitHubRAGSystem {
     pub graph: Arc<Graph>,
@@ -17,8 +17,8 @@ pub struct GitHubRAGSystem {
 }
 
 impl GitHubRAGSystem {
-    pub async fn new() -> anyhow::Result<Self> {
-        let graph = graph::build_rag_graph().await?;
+    pub async fn new(database: Database) -> anyhow::Result<Self> {
+        let graph = graph::build_rag_graph(database).await?;
         let session_storage = Arc::new(InMemorySessionStorage::new());
 
         Ok(Self {

@@ -91,13 +91,11 @@ mod tests {
             },
             DiscussionDbSchema,
         },
-        lang_graph::GitHubRAGSystem,
         outbound::discussions::ReactionContent,
     };
 
     #[tokio::test]
     async fn discussion_empty() {
-        let rag = GitHubRAGSystem::new().await.unwrap();
         let schema = TestSchema::new().await;
         let query = r"
         {
