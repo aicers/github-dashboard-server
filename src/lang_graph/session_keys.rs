@@ -13,3 +13,4 @@ pub const QUANTITATIVE_SEGMENTS: &str = "quantitative_segments";
 pub const QUALITATIVE_SEGMENTS: &str = "qualitative_segments";
 
 pub const VALIDATION_PASS: &str = "validation_pass";
+pub const GRAPHQL_EXECUTE_ERROR: &str = "graphql_execute_error";

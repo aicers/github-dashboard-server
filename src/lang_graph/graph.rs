@@ -53,7 +53,15 @@ pub async fn build_rag_graph(database: Database) -> anyhow::Result<Arc<graph_flo
         .add_edge(context_reranking.id(), rag_generation.id())
         .add_edge(rag_generation.id(), graphql_generator.id())
         .add_edge(graphql_generator.id(), graphql_executor.id())
-        .add_edge(graphql_executor.id(), statistics_response.id())
+        .add_conditional_edge(
+            graphql_executor.id(),
+            |ctx| {
+                ctx.get_sync::<bool>(session_keys::GRAPHQL_EXECUTE_ERROR)
+                    .unwrap_or(false)
+            },
+            graphql_generator.id(),
+            statistics_response.id(),
+        )
         .add_edge(statistics_response.id(), response_formatter.id())
         .build();
 
