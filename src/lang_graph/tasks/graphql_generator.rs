@@ -76,6 +76,11 @@ impl Task for GraphQLGeneratorTask {
 
         info!("GraphQLGeneratorTask started. Session: {}", session_id);
 
+        let is_error = context
+            .get::<bool>(session_keys::GRAPHQL_EXECUTE_ERROR)
+            .await
+            .unwrap_or(true);
+
         let segments: Vec<Segment> = context
             .get_sync(session_keys::QUANTITATIVE_SEGMENTS)
             .ok_or_else(|| {
@@ -95,14 +100,30 @@ impl Task for GraphQLGeneratorTask {
         let segments_json = serde_json::to_string_pretty(&segments).map_err(|e| {
             GraphError::TaskExecutionFailed(format!("Segment serialization error: {e}"))
         })?;
+        let prompt = if is_error {
+            let error_message = context
+                .get::<String>(session_keys::GRAPHQL_RESULT)
+                .await
+                .unwrap_or_default();
 
-        let prompt = format!(
+            format!(
+            "Below are multiple parsed segments representing parts of a user's natural language question:\n\
+            {segments_json}\n\n\
+            A GraphQL query was previously generated using similar segments, but it failed with the following error:\n\
+            {error_message}\n\n\
+            Please regenerate the query while strictly adhering to the schema. \
+            Include as many of the segments as possible, but omit any that cannot be fulfilled based on the schema.\n\n\
+            Only return the final GraphQL query. Do not explain."
+            )
+        } else {
+            format!(
             "Below are multiple parsed segments representing parts of a user's natural language question:\n\
             {segments_json}\n\n\
             Generate a **single valid GraphQL query** that includes as many of these segments as possible. \
             If some segments are not answerable based on the schema, omit them.\n\n\
             Only return the final GraphQL query. Do not explain."
-        );
+                )
+        };
 
         let chat_history = context.get_rig_messages().await;
 

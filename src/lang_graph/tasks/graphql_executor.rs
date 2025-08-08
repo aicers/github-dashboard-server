@@ -40,6 +40,28 @@ impl Task for GraphQLExecutorTask {
         let execution_result = schema.execute(&graphql_query).await;
         info!("{:?}", execution_result);
 
+        if execution_result.is_err() {
+            context.set(session_keys::GRAPHQL_EXECUTE_ERROR, true).await;
+            context
+                .set(
+                    session_keys::GRAPHQL_RESULT,
+                    execution_result
+                        .errors
+                        .iter()
+                        .map(|e| e.message.clone())
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                )
+                .await;
+            return Ok(TaskResult::new(
+                Some("GraphQL query Fail".to_string()),
+                NextAction::Continue,
+            ));
+        }
+        context
+            .set(session_keys::GRAPHQL_EXECUTE_ERROR, false)
+            .await;
+
         context
             .set(
                 session_keys::GRAPHQL_RESULT,
