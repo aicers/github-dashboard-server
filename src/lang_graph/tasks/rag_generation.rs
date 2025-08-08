@@ -123,7 +123,7 @@ impl Task for RAGGenerationTask {
                     .map(|res| res.generated_response.clone())
                     .collect::<String>()
             )),
-            NextAction::End,
+            NextAction::Continue,
         ))
     }
 }

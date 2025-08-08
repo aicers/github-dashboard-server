@@ -87,12 +87,10 @@ mod tests {
         },
         github::discussions::ReactionContent,
         graphql::TestSchema,
-        lang_graph::GitHubRAGSystem,
     };
 
     #[tokio::test]
     async fn discussion_empty() {
-        let rag = GitHubRAGSystem::new().await.unwrap();
         let schema = TestSchema::new().await;
         let query = r"
         {

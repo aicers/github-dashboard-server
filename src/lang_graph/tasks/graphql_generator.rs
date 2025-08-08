@@ -26,25 +26,37 @@ impl GraphQLGeneratorTask {
                 info!("Failed to read schema.graphql, using empty schema");
                 String::new()
             });
+
         let agent = client
-            .agent("llama3.1:8b")
-            .preamble(
-                format!(
-                    "You are a helpful assistant that translates natural language into GraphQL queries.\n\n\
-                    There are some rules you must follow:\n\n\
-                    - Return {{}} if the answer cannot be found in the schema.\n\
-                    - Return a single GraphQL query that answers the user's intent.\n\
-                    - Don't use any queries that return a type ending in `Connection!`.\n\
-                    - Don't explain the query, just return it.\n\
-                    - Only return `query {{ ... }}` or `{{}}`. No prose or markdown.\n\
-                    - If some segments are unanswerable, exclude them and build a partial query.\n\n\
-                    - Today's date is {today}.\n\
-                    - Timezone: UTC.\n\n\
-                    Schema:\n{schema_doc}\n"
-                )
-                .as_str(),
-            )
-            .build();
+        .agent("llama3.1:8b")
+        .preamble(&format!(
+            r#"You are a helpful assistant that translates natural language into GraphQL queries.
+            You MUST strictly adhere to the provided schema.
+
+            **CRITICAL RULES:**
+            1.  **Use Double Quotes Only:** All strings in the GraphQL query (field names and values) MUST use double quotes (`"`). Single quotes (`'`) are strictly forbidden.
+            2.  **Strict Schema Adherence:** You MUST NOT use any fields or arguments not explicitly defined in the provided `Schema`. If a user's request cannot be fulfilled, you MUST return {{}}
+            3.  **JSON Only:** Return a single GraphQL query string or an empty JSON object {{}}
+            4.  **No Explanations:** Do not use prose, markdown, or any text outside the query string.
+            5.  **No Connections:** Do not use any queries that return a type ending in `Connection!`.
+
+            **EXAMPLES:**
+            - **User Intent:** 'How many open refactor issues are there in github-dashboard-server?'
+            - **Analysis:** The user wants to filter `issueStat` by a label ('refactor'). However, the `IssueStatFilter` input type in the schema does NOT have a `labels` field. Therefore, this query cannot be fulfilled.
+            - **Correct Output:** {{}}
+
+            - **User Intent:** 'Show me statistics for issues in the github-dashboard-server repo.'
+            - **Analysis:** This can be fulfilled using the `repo` field in `IssueStatFilter`.
+            - **Correct Output:** `query {{ issueStat(filter: {{ repo: 'github-dashboard-server' }}) {{ openIssueCount }} }}`
+
+            ---
+            Today's date is {today}.
+            Timezone: UTC.
+
+            Schema:
+            {schema_doc}"#,
+            ))
+        .build();
 
         Self { agent }
     }
