@@ -21,10 +21,10 @@ pub struct RAGGenerationTask {
 }
 
 impl RAGGenerationTask {
-    pub fn new() -> Self {
+    pub fn new(model: &str) -> Self {
         let client = providers::ollama::Client::new();
         let agent = client
-            .agent("llama3.1:8b")
+            .agent(model)
             .preamble(
                 r"You are a GitHub repository expert assistant. Generate comprehensive, accurate responses using the provided context from GitHub issues, PRs, discussions, and documentation.
 

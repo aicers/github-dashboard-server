@@ -23,10 +23,10 @@ pub struct VectorSearchTask {
     agent: Agent<CompletionModel>,
 }
 impl VectorSearchTask {
-    pub fn new() -> Self {
+    pub fn new(model: &str) -> Self {
         let client = providers::ollama::Client::new();
         let agent = client
-            .agent("llama3.1:8b")
+            .agent(model)
             .preamble(
                 r#"You are an AI assistant that specializes in parsing user queries to extract structured data for filtering GitHub information.
                 Your sole function is to analyze the user's query and return a JSON object containing the appropriate filters based on the schema provided below.

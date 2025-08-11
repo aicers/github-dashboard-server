@@ -22,7 +22,7 @@ pub struct TypeValidationTask {
 }
 
 impl TypeValidationTask {
-    pub fn new() -> Self {
+    pub fn new(model: &str) -> Self {
         let client = providers::ollama::Client::new();
 
         let prompt = r#"
@@ -63,7 +63,7 @@ impl TypeValidationTask {
         "#.to_string();
 
         let agent = client
-            .agent("llama3.1:8b")
+            .agent(model)
             .preamble(&prompt)
             .temperature(0.3)
             .build();

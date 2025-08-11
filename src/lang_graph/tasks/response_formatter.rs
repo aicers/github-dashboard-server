@@ -18,10 +18,10 @@ pub struct ResponseFormatterTask {
 }
 
 impl ResponseFormatterTask {
-    pub fn new() -> Self {
+    pub fn new(model: &str) -> Self {
         let client = providers::ollama::Client::new();
         let agent = client
-            .agent("llama3.1:8b")
+            .agent(model)
             .preamble(
                 "
                 You are an expert assistant that generates final answers by combining both quantitative and qualitative information.
