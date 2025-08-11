@@ -21,7 +21,7 @@ pub struct QueryEnhancementTask {
 }
 
 impl QueryEnhancementTask {
-    pub fn new() -> Self {
+    pub fn new(model: &str) -> Self {
         let client = providers::ollama::Client::new();
         let schema_doc =
             fs::read_to_string("src/lang_graph/schema2.graphql").unwrap_or_else(|_| {
@@ -71,7 +71,7 @@ impl QueryEnhancementTask {
             "#
         );
 
-        let agent = client.agent("llama3.1:8b").preamble(&prompt).build();
+        let agent = client.agent(model).preamble(&prompt).build();
 
         Self { agent }
     }

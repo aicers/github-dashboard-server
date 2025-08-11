@@ -18,7 +18,7 @@ pub struct GraphQLGeneratorTask {
 }
 
 impl GraphQLGeneratorTask {
-    pub fn new() -> Self {
+    pub fn new(model: &str) -> Self {
         let client = providers::ollama::Client::new();
         let today = Zoned::now().to_string();
         let schema_doc =
@@ -28,7 +28,7 @@ impl GraphQLGeneratorTask {
             });
 
         let agent = client
-        .agent("llama3.1:8b")
+        .agent(model)
         .preamble(&format!(
             r#"You are a helpful assistant that translates natural language into GraphQL queries.
             You MUST strictly adhere to the provided schema.

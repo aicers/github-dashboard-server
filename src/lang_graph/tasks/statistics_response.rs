@@ -18,10 +18,10 @@ pub struct StatisticsResponseTask {
 }
 
 impl StatisticsResponseTask {
-    pub fn new() -> Self {
+    pub fn new(model: &str) -> Self {
         let client = providers::ollama::Client::new();
         let agent = client
-            .agent("llama3.1:8b")
+            .agent(model)
             .preamble(
                 r"You are a statistics interpreter for GitHub data analysis.
 

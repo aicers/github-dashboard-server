@@ -14,18 +14,20 @@ use crate::{
     },
 };
 
+static MODEL: &str = "gpt-oss:20b";
+
 #[allow(clippy::unused_async)]
 pub async fn build_rag_graph(database: Database) -> anyhow::Result<Arc<graph_flow::Graph>> {
-    let query_enhancement = Arc::new(query_enhancement::QueryEnhancementTask::new());
+    let query_enhancement = Arc::new(query_enhancement::QueryEnhancementTask::new(MODEL));
     let segment_parser = Arc::new(segment_parser::SegmentParserTask::new());
-    let type_validation = Arc::new(type_validation::TypeValidationTask::new());
-    let vector_search = Arc::new(vector_search::VectorSearchTask::new());
-    let context_reranking = Arc::new(context_reranking::ContextRerankTask::new());
-    let rag_generation = Arc::new(rag_generation::RAGGenerationTask::new());
-    let graphql_generator = Arc::new(graphql_generator::GraphQLGeneratorTask::new());
+    let type_validation = Arc::new(type_validation::TypeValidationTask::new(MODEL));
+    let vector_search = Arc::new(vector_search::VectorSearchTask::new(MODEL));
+    let context_reranking = Arc::new(context_reranking::ContextRerankTask::new(MODEL));
+    let rag_generation = Arc::new(rag_generation::RAGGenerationTask::new(MODEL));
+    let graphql_generator = Arc::new(graphql_generator::GraphQLGeneratorTask::new(MODEL));
     let graphql_executor = Arc::new(graphql_executor::GraphQLExecutorTask::new(database));
-    let statistics_response = Arc::new(statistics_response::StatisticsResponseTask::new());
-    let response_formatter = Arc::new(response_formatter::ResponseFormatterTask::new());
+    let statistics_response = Arc::new(statistics_response::StatisticsResponseTask::new(MODEL));
+    let response_formatter = Arc::new(response_formatter::ResponseFormatterTask::new(MODEL));
 
     let graph = GraphBuilder::new("github_rag_workflow")
         .add_task(query_enhancement.clone())

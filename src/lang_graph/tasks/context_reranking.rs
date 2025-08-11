@@ -18,10 +18,10 @@ pub struct ContextRerankTask {
 }
 
 impl ContextRerankTask {
-    pub fn new() -> Self {
+    pub fn new(model: &str) -> Self {
         let client = providers::ollama::Client::new();
         let agent = client
-            .agent("llama3.1:8b")
+            .agent(model)
             .preamble(
                 r"You are a context reranking specialist. Your task is to reorder a given JSON array of documents based on their relevance to a user's query.
                 You will receive a user query and a JSON array of documents. Your goal is to return the exact same array, with the documents rearranged from most relevant to least relevant.
