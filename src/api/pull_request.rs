@@ -6,7 +6,10 @@ use async_graphql::{
     Context, Object, Result, SimpleObject,
 };
 
-use crate::database::{self, Database, TryFromKeyValue};
+use crate::{
+    api,
+    database::{self, Database, TryFromKeyValue},
+};
 
 #[derive(SimpleObject)]
 pub(crate) struct PullRequest {
@@ -61,7 +64,7 @@ impl PullRequestQuery {
             first,
             last,
             |after, before, first, last| async move {
-                super::load_connection(ctx, Database::pull_requests, after, before, first, last)
+                api::load_connection(ctx, Database::pull_requests, after, before, first, last)
             },
         )
         .await
@@ -70,7 +73,7 @@ impl PullRequestQuery {
 
 #[cfg(test)]
 mod tests {
-    use crate::{github::GitHubPullRequests, graphql::TestSchema};
+    use crate::{api::TestSchema, outbound::GitHubPullRequests};
 
     #[tokio::test]
     async fn pull_requests_empty() {

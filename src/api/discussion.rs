@@ -7,8 +7,9 @@ use async_graphql::{
 };
 
 use crate::{
+    api,
     database::{self, Database, DiscussionDbSchema, TryFromKeyValue},
-    github::discussions::ReactionContent,
+    outbound::discussions::ReactionContent,
 };
 
 scalar!(ReactionContent);
@@ -53,7 +54,7 @@ impl DiscussionQuery {
             first,
             last,
             |after, before, first, last| async move {
-                super::load_connection(ctx, Database::discussions, after, before, first, last)
+                api::load_connection(ctx, Database::discussions, after, before, first, last)
             },
         )
         .await
@@ -79,14 +80,14 @@ impl fmt::Display for Discussion {
 #[cfg(test)]
 mod tests {
     use crate::{
+        api::TestSchema,
         database::{
             discussion::{
                 Answer, Category, Comment, Comments, Labels, Reaction, Reactions, Replies, Reply,
             },
             DiscussionDbSchema,
         },
-        github::discussions::ReactionContent,
-        graphql::TestSchema,
+        outbound::discussions::ReactionContent,
     };
 
     #[tokio::test]

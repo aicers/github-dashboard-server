@@ -10,7 +10,7 @@ use tracing::error;
 
 use crate::{
     database::Database,
-    github::{
+    outbound::{
         issues::{
             IssueState, IssuesRepositoryIssuesNodesAuthor::User as IssueAuthor,
             IssuesRepositoryIssuesNodesClosedByPullRequestsReferencesEdgesNodeAuthor::User as PullRequestRefAuthor,
@@ -41,23 +41,23 @@ type URI = String;
 
 #[derive(GraphQLQuery)]
 #[graphql(
-    schema_path = "src/github/schema.graphql",
-    query_path = "src/github/issues.graphql",
+    schema_path = "src/outbound/graphql/schema.graphql",
+    query_path = "src/outbound/graphql/issues.graphql",
     response_derives = "Debug, Clone"
 )]
 pub(crate) struct Issues;
 
 #[derive(GraphQLQuery)]
 #[graphql(
-    schema_path = "src/github/schema.graphql",
-    query_path = "src/github/pull_requests.graphql"
+    schema_path = "src/outbound/graphql/schema.graphql",
+    query_path = "src/outbound/graphql/pull_requests.graphql"
 )]
 struct PullRequests;
 
 #[derive(GraphQLQuery)]
 #[graphql(
-    schema_path = "src/github/schema.graphql",
-    query_path = "src/github/discussions.graphql",
+    schema_path = "src/outbound/graphql/schema.graphql",
+    query_path = "src/outbound/graphql/discussions.graphql",
     response_derives = "Debug"
 )]
 pub(crate) struct Discussions;
