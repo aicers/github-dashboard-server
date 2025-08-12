@@ -30,6 +30,18 @@ cargo run -- -c <CONFIG_PATH> \
 - `-h`, `--help`: Displays help information.
 - `-V`, `--version`: Displays version information.
 
+## Requirements for GitHub Personal Access Token
+
+In order to use this repository, you need [GitHub personal access
+token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-token).
+
+- Type of token should be fine-grained personal access token.
+- Minimum required permissions of token are as follows:
+  - Repository Access: Access to all repositories
+  - Organization Permissions: Read-only access to organization projects
+  - Repository Permissions: Read-only access to issues and pull requests (access
+    to metadata will be automatically added)
+
 ## Configuration
 
 In the configuration file, you can specify the following options:
@@ -62,12 +74,8 @@ In the configuration file, you can specify the following options:
 
 <!-- markdownlint-enable MD013-->
 
-- `token`: The [personal access token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-token)'s
-  lifetime should be less than one year for security purposes. Minimum required
-  permissions are as follows:
-  - Repository: Access to all repositories
-  - Issues: Read-only access
-  - Pull Requests: Read-only access
+- `token`: A GitHub fine-grained personal access token. See
+  [requirements for GitHub personal access token](#requirements-for-github-personal-access-token).
 - `ssh`: To provide an SSH passphrase, set the `SSH_PASSPHRASE` environment variable.
 
 ### `[database]`
