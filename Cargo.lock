@@ -1090,6 +1090,7 @@ dependencies = [
  "clap",
  "config",
  "directories",
+ "futures",
  "git2",
  "graph-flow",
  "graphql_client",

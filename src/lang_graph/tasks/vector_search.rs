@@ -1,15 +1,16 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use graph_flow::{Context, GraphError, NextAction, Task, TaskResult};
+use graph_flow::{Context, NextAction, Task, TaskResult};
 use qdrant_client::qdrant::{Condition, Filter};
 use rig::{
     agent::Agent,
     client::CompletionClient,
     completion::Chat,
+    completion::Message,
     providers::{self, ollama::CompletionModel},
     vector_store::VectorStoreIndexDyn,
 };
-use tracing::{error, info};
+use tracing::{debug, error, info, instrument, Span};
 
 use crate::{
     lang_graph::{
@@ -66,27 +67,26 @@ impl VectorSearchTask {
         Self { agent }
     }
 }
-
 #[async_trait]
-#[allow(clippy::too_many_lines)]
 impl Task for VectorSearchTask {
+    #[instrument(name = "vector_search_task", skip(self, context), fields(session_id))]
     async fn run(&self, context: Context) -> graph_flow::Result<TaskResult> {
-        info!("{}", self.id());
         let session_id = context
             .get::<String>("session_id")
             .await
             .unwrap_or_else(|| "unknown".to_string());
-        info!("VectorSearchTask started. Session: {}", session_id);
+        Span::current().record("session_id", &session_id);
+
+        info!("Starting task");
+
         let qualitative_segments: Vec<Segment> = context
             .get_sync(session_keys::QUALITATIVE_SEGMENTS)
             .unwrap_or_default();
 
         if qualitative_segments.is_empty() {
+            info!("No qualitative segments to process. Skipping.");
             context
-                .set(
-                    session_keys::VECTOR_SEARCH_RESULTS,
-                    Vec::<(Segment, Vec<VectorSearchResult>)>::new(),
-                )
+                .set(session_keys::VECTOR_SEARCH_RESULTS, Vec::<Segment>::new())
                 .await;
             return Ok(TaskResult::new(
                 Some("No qualitative segments found".to_string()),
@@ -94,90 +94,39 @@ impl Task for VectorSearchTask {
             ));
         }
 
-        info!("VectorSearchTask started");
+        let mut all_results = Vec::new();
+        let chat_history = context.get_rig_messages().await;
 
-        let mut segement_vector_results = Vec::new();
-
-        for segment in &qualitative_segments {
-            info!("Processing segment: {:?}", segment.enhanced);
-
-            let filter = self
-                .generate_filter(context.clone(), segment.clone())
-                .await?;
-
-            let vector_store = get_storage(filter.clone()).await?;
-            let search_results = vector_store.top_n(&segment.enhanced, 10).await;
-
-            let results = match search_results {
-                Ok(docs) if docs.is_empty() && filter.is_some() => {
-                    info!("Search with filter yielded 0 results. Retrying without filter...");
-                    let vector_store_no_filter = get_storage(None).await?;
-
-                    match vector_store_no_filter.top_n(&segment.enhanced, 10).await {
-                        Ok(result) => result,
-                        Err(e) => {
-                            error!("{e}");
-                            Vec::default()
-                        }
-                    }
-                }
-                Ok(docs) => {
-                    info!("Vector search successful. Found {} documents.", docs.len());
-                    docs
+        for segment in qualitative_segments {
+            match self
+                .search_for_segment(chat_history.clone(), &segment)
+                .await
+            {
+                Ok(vector_results) => {
+                    all_results.push((segment, vector_results));
                 }
                 Err(e) => {
-                    error!("Vector search error: {}", e);
-                    return Err(GraphError::ContextError(format!(
-                        "Vector search error: {e}"
-                    )));
+                    error!(segment_id = %segment.id, error = ?e, "Failed to process segment");
                 }
-            };
-
-            info!("Vector search returned {} results", results.len());
-            #[allow(clippy::cast_possible_truncation)]
-            let vector_results: Vec<VectorSearchResult> = results
-                .into_iter()
-                .map(|(score, id, payload)| VectorSearchResult {
-                    id: id.to_string(),
-                    content: payload
-                        .get("page_content")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string(),
-                    metadata: serde_json::to_value(payload.get("metadata")).unwrap_or_default(),
-                    score: score as f32,
-                })
-                .collect();
-
-            info!(
-                "Segment '{}' vector search results: {:?}",
-                segment.enhanced,
-                serde_json::to_string_pretty(
-                    &serde_json::to_value(vector_results.clone()).unwrap()
-                )
-                .unwrap()
-            );
-            segement_vector_results.push((segment.clone(), vector_results));
+            }
         }
 
+        info!(
+            processed_segments = all_results.len(),
+            "Finished processing all segments."
+        );
+
         context
-            .set(
-                session_keys::VECTOR_SEARCH_RESULTS,
-                segement_vector_results.clone(),
-            )
+            .set(session_keys::VECTOR_SEARCH_RESULTS, all_results.clone())
             .await;
         context
-            .add_assistant_message(format!(
-                "Found {} relevant documents",
-                segement_vector_results.len()
-            ))
+            .add_assistant_message(format!("Found {} relevant documents", all_results.len()))
             .await;
-        info!("Context updated with vector search results");
 
         Ok(TaskResult::new(
             Some(format!(
-                "Vector search completed with {} results",
-                segement_vector_results.len()
+                "Vector search completed for {} segments",
+                all_results.len()
             )),
             NextAction::Continue,
         ))
@@ -185,21 +134,77 @@ impl Task for VectorSearchTask {
 }
 
 impl VectorSearchTask {
-    async fn generate_filter(&self, context: Context, segment: Segment) -> Result<Option<Filter>> {
-        let chat_history = context.get_rig_messages().await;
-        let prompt = format!(
-            "Analyze this GitHub repository query: {}",
-            serde_json::to_string(&segment).unwrap_or_default()
-        );
-        let response = self
-            .agent
-            .chat(&prompt, chat_history)
-            .await
-            .map_err(|e| GraphError::TaskExecutionFailed(format!("LLM error: {e}")))?;
+    #[instrument(
+        name = "search_for_segment",
+        skip(self, chat_history),
+        fields(segment_id = %segment.id, segment_enhanced = %segment.enhanced)
+    )]
+    async fn search_for_segment(
+        &self,
+        chat_history: Vec<Message>,
+        segment: &Segment,
+    ) -> Result<Vec<VectorSearchResult>> {
+        info!("Processing segment");
+        let filter = self.generate_filter(chat_history, segment).await?;
+        debug!(?filter, "Generated filter for segment");
 
-        info!(response);
-        let generated_filter: serde_json::Value = serde_json::from_str(&response)
-            .map_err(|e| GraphError::TaskExecutionFailed(format!("JSON parse error: {e}")))?;
+        let vector_store = get_storage(filter.clone()).await?;
+        let search_results = vector_store.top_n(&segment.enhanced, 10).await;
+
+        let results = match search_results {
+            Ok(docs) if docs.is_empty() && filter.is_some() => {
+                info!("Search with filter yielded 0 results. Retrying without filter...");
+                let vector_store_no_filter = get_storage(None).await?;
+                vector_store_no_filter.top_n(&segment.enhanced, 10).await?
+            }
+            Ok(docs) => docs,
+            Err(e) => {
+                error!(error = %e, "Initial vector search failed");
+                return Err(anyhow::anyhow!("Vector search error: {e}"));
+            }
+        };
+
+        info!(found_documents = results.len(), "Vector search successful");
+
+        let vector_results: Vec<VectorSearchResult> = results
+            .into_iter()
+            .map(|(score, id, payload)| VectorSearchResult {
+                id: id.to_string(),
+                content: payload
+                    .get("page_content")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                metadata: serde_json::to_value(payload.get("metadata")).unwrap_or_default(),
+                score: score as f32,
+            })
+            .collect();
+
+        debug!(results = ?vector_results, "Mapped search results");
+
+        Ok(vector_results)
+    }
+
+    #[instrument(name = "generate_filter", skip(self, chat_history, segment))]
+    async fn generate_filter(
+        &self,
+        chat_history: Vec<Message>,
+        segment: &Segment,
+    ) -> Result<Option<Filter>> {
+        let prompt = format!("Analyze this query: {}", &segment.enhanced);
+        debug!(%prompt, "Generating filter with LLM");
+
+        let response = self.agent.chat(&prompt, chat_history).await.map_err(|e| {
+            error!(error = ?e, "LLM call for filter generation failed");
+            anyhow::anyhow!("LLM error: {e}")
+        })?;
+
+        debug!(raw_response = %response, "Received raw filter response from LLM");
+
+        let generated_filter: serde_json::Value = serde_json::from_str(&response).map_err(|e| {
+            error!(error = ?e, raw_response = %response, "Failed to parse filter JSON");
+            anyhow::anyhow!("JSON parse error: {e}")
+        })?;
 
         let filter = if generated_filter.get("no_filter").is_some() {
             None

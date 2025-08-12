@@ -6,11 +6,11 @@ use rig::{
     completion::Chat,
     providers::{self},
 };
-use tracing::info;
+use tracing::{debug, error, info, instrument, Span};
 
 use crate::lang_graph::{
     session_keys,
-    types::query::{EnhancedQuery, QueryType},
+    types::query::{EnhancedQuery, Segment},
 };
 
 pub struct StatisticsResponseTask {
@@ -29,19 +29,15 @@ impl StatisticsResponseTask {
 
                 - The original user query
                 - A list of semantic segments
-                - For each segment:
-                - The enhanced query (natural language)
-                - The corresponding GraphQL query
-                - The GraphQL response
+                - The corresponding GraphQL query and its response
 
-                Your task is to generate a clear, user-friendly statistical summary that integrates the results across all segments.
+                Your task is to generate a clear, user-friendly statistical summary that integrates the results.
 
                 Focus on:
-                1. Key metrics and numbers
-                2. Trends and patterns
-                3. Comparative insights across segments
-                4. Clear explanations of what the data means
-                5. Actionable insights when appropriate
+                1. Key metrics and numbers from the GraphQL response.
+                2. Trends and patterns revealed by the data.
+                3. Clear explanations of what the data means in the context of the user's query.
+                4. Actionable insights when appropriate.
 
                 Always provide context for the numbers and explain their significance in relation to the original user intent.
                 If possible, summarize insights in a way that helps decision-making or further investigation.",
@@ -55,45 +51,30 @@ impl StatisticsResponseTask {
 #[async_trait]
 impl Task for StatisticsResponseTask {
     fn id(&self) -> &str {
-        std::any::type_name::<Self>()
+        "StatisticsResponseTask"
     }
 
+    #[instrument(
+        name = "statistics_response_task",
+        skip(self, context),
+        fields(session_id)
+    )]
     async fn run(&self, context: Context) -> graph_flow::Result<TaskResult> {
         let session_id = context
             .get::<String>("session_id")
             .await
             .unwrap_or_else(|| "unknown".to_string());
-        info!("StatisticsResponseTask started. Session: {}", session_id);
-        let enhanced_query: EnhancedQuery = context
-            .get_sync(session_keys::ENHANCED_QUERY)
-            .ok_or_else(|| GraphError::ContextError("No enhanced query found".to_string()))?;
-
-        let enhanced_segements: Vec<String> = enhanced_query
-            .segments
-            .into_iter()
-            .filter(|segment| {
-                matches!(
-                    segment.query_type,
-                    QueryType::Quantitative | QueryType::Qualitative
-                )
-            })
-            .map(|segement| segement.enhanced)
-            .collect();
-
-        let graphql_query: String = context
-            .get_sync(session_keys::GRAPHQL_QUERY)
-            .unwrap_or_default();
+        Span::current().record("session_id", &session_id);
+        info!("Starting task");
 
         let graphql_result: serde_json::Value = context
             .get_sync(session_keys::GRAPHQL_RESULT)
             .ok_or_else(|| GraphError::ContextError("No GraphQL results found".to_string()))?;
 
         if graphql_result.is_null() {
+            info!("No GraphQL results to analyze. Skipping.");
             context
-                .set(
-                    session_keys::STATISTICS_RESPONSE,
-                    "No GraphQL results to analyze".to_string(),
-                )
+                .set(session_keys::STATISTICS_RESPONSE, String::new())
                 .await;
             return Ok(TaskResult::new(
                 Some("No GraphQL results to analyze".to_string()),
@@ -101,29 +82,35 @@ impl Task for StatisticsResponseTask {
             ));
         }
 
-        let chat_history = context.get_rig_messages().await;
+        let enhanced_query: EnhancedQuery = context
+            .get_sync(session_keys::ENHANCED_QUERY)
+            .ok_or_else(|| GraphError::ContextError("No enhanced query found".to_string()))?;
 
-        let prompt = format!(
-            "Analyze these GitHub GraphQL results for the user query:\n\"{}\"\n\n\
-            Enhanced queries:\n{}\n\n\
-            Generated GraphQL queries:\n{}\n\n\
-            Corresponding GraphQL results:\n{}\n\n\
-            Provide a clear, user-friendly statistical summary.",
-            enhanced_query.original,
-            enhanced_segements
-                .iter()
-                .map(|s| format!("- {s}"))
-                .collect::<Vec<_>>()
-                .join("\n"),
-            graphql_query,
-            serde_json::to_string_pretty(&graphql_result).unwrap()
-        );
+        let graphql_query: String = context
+            .get_sync(session_keys::GRAPHQL_QUERY)
+            .unwrap_or_default();
 
-        let stats_response = self
-            .agent
-            .chat(&prompt, chat_history)
+        let qualitative_segments: Vec<Segment> = context
+            .get(session_keys::QUALITATIVE_SEGMENTS)
             .await
-            .map_err(|e| GraphError::TaskExecutionFailed(format!("LLM error: {e}")))?;
+            .ok_or_else(|| GraphError::ContextError("No segments found".to_string()))?;
+
+        let prompt = self.build_prompt(
+            &enhanced_query,
+            &qualitative_segments,
+            &graphql_query,
+            &graphql_result,
+        )?;
+        debug!(%prompt, "Generated prompt for statistics generation");
+
+        let chat_history = context.get_rig_messages().await;
+        let stats_response = self.agent.chat(&prompt, chat_history).await.map_err(|e| {
+            error!(error = ?e, "LLM call for statistics generation failed");
+            GraphError::TaskExecutionFailed(format!("LLM error: {e}"))
+        })?;
+
+        debug!(%stats_response, "Received raw statistics response from LLM");
+        info!("Successfully generated statistical summary.");
 
         context
             .set(session_keys::STATISTICS_RESPONSE, stats_response.clone())
@@ -134,14 +121,48 @@ impl Task for StatisticsResponseTask {
             )
             .await;
 
-        info!(
-            "StatisticsResponseTask finished. Response: {}",
-            &stats_response
-        );
-
         Ok(TaskResult::new(
             Some("Statistics response generated successfully".to_string()),
             NextAction::Continue,
         ))
+    }
+}
+
+impl StatisticsResponseTask {
+    fn build_prompt(
+        &self,
+        enhanced_query: &EnhancedQuery,
+        segments: &Vec<Segment>,
+        graphql_query: &str,
+        graphql_result: &serde_json::Value,
+    ) -> graph_flow::Result<String> {
+        let quantitative_segments: Vec<String> = segments
+            .iter()
+            .map(|segment| segment.enhanced.clone())
+            .collect();
+
+        let graphql_result_str = serde_json::to_string_pretty(graphql_result).map_err(|e| {
+            error!(error = ?e, "Failed to serialize GraphQL result for prompt");
+            GraphError::TaskExecutionFailed(format!("GraphQL result serialization error: {e}"))
+        })?;
+
+        let prompt = format!(
+            "Analyze these GitHub GraphQL results in the context of the user's original query.\n\n\
+            ORIGINAL USER QUERY: \"{}\"\n\n\
+            STATISTICAL QUESTIONS (derived from the original query):\n{}\n\n\
+            EXECUTED GRAPHQL QUERY:\n{}\n\n\
+            GRAPHQL RESULT (JSON):\n{}\n\n\
+            Based on all the above, provide a clear, user-friendly statistical summary.",
+            enhanced_query.original,
+            quantitative_segments
+                .iter()
+                .map(|s| format!("- {s}"))
+                .collect::<Vec<_>>()
+                .join("\n"),
+            graphql_query,
+            graphql_result_str
+        );
+
+        Ok(prompt)
     }
 }

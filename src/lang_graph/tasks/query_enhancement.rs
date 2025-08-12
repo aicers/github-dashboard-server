@@ -8,12 +8,11 @@ use rig::{
     completion::Chat,
     providers::{self},
 };
-use tracing::info;
+use tracing::{debug, error, info, instrument, Span};
 
 use crate::lang_graph::{
     session_keys,
     types::query::{EnhancedQuery, Segment},
-    utils::pretty_log,
 };
 
 pub struct QueryEnhancementTask {
@@ -79,35 +78,58 @@ impl QueryEnhancementTask {
 
 #[async_trait]
 impl Task for QueryEnhancementTask {
+    #[instrument(
+        name = "query_enhancement_task",
+        skip(self, context),
+        fields(session_id, user_query)
+    )]
     async fn run(&self, context: Context) -> graph_flow::Result<TaskResult> {
         let session_id = context
             .get::<String>("session_id")
             .await
             .unwrap_or_else(|| "unknown".to_string());
 
-        info!("QueryEnhancementTask started. Session: {}", session_id);
+        Span::current().record("session_id", &session_id);
 
         let user_query: String = context
             .get_sync(session_keys::USER_QUERY)
             .ok_or_else(|| GraphError::ContextError("No user query found".to_string()))?;
 
+        Span::current().record("user_query", &user_query);
+
+        info!("Starting task");
+
         let chat_history = context.get_rig_messages().await;
 
         let mut prompt = format!("Analyze this GitHub repository query: {user_query}");
-        if let Some(message) = context.get::<String>("validation_message").await {
-            prompt.push_str(&message);
+        if let Some(fail_reason) = context.get::<String>("validation_message").await {
+            info!(validation_message = %fail_reason, "Applying validation feedback for retry");
+            let feedback_prompt = format!(
+            "\n\n[Correction] Your previous analysis was incorrect. You must regenerate the segments based on the following feedback: {}",
+                fail_reason
+            );
+            prompt.push_str(&feedback_prompt);
         }
 
-        let response = self
-            .agent
-            .chat(&prompt, chat_history)
-            .await
-            .map_err(|e| GraphError::ContextError(format!("LLM error: {e}")))?;
+        debug!(prompt = %prompt, "Sending prompt to LLM");
 
-        let segments: Vec<Segment> = serde_json::from_str(&response)
-            .map_err(|e| GraphError::TaskExecutionFailed(format!("JSON parse error: {e}")))?;
+        let response = self.agent.chat(&prompt, chat_history).await.map_err(|e| {
+            error!(error = ?e, "LLM API call failed");
+            GraphError::ContextError(format!("LLM error: {e}"))
+        })?;
 
-        pretty_log("QueryEnhancementTask finished. Segments:", &response);
+        debug!(raw_response = %response, "Received raw response from LLM");
+
+        let segments: Vec<Segment> = serde_json::from_str(&response).map_err(|e| {
+            error!(error = ?e, raw_response = %response, "Failed to parse LLM response as JSON");
+            GraphError::TaskExecutionFailed(format!("JSON parse error: {e}"))
+        })?;
+
+        info!(
+            segments_count = segments.len(),
+            "Successfully enhanced query and parsed segments"
+        );
+        debug!(segments = ?segments, "Parsed segments details");
 
         let enhanced_query = EnhancedQuery {
             original: user_query.clone(),
