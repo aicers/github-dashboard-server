@@ -1123,6 +1123,7 @@ dependencies = [
  "config",
  "directories",
  "fjall",
+ "futures",
  "git2",
  "graph-flow",
  "graphql_client",

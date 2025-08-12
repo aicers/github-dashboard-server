@@ -1,12 +1,13 @@
 use async_trait::async_trait;
+use futures::future::join_all;
 use graph_flow::{Context, GraphError, NextAction, Task, TaskResult};
 use rig::{
     agent::Agent,
     client::CompletionClient,
-    completion::Chat,
+    completion::{Chat, Message},
     providers::{self},
 };
-use tracing::info;
+use tracing::{debug, error, info, instrument, Span};
 
 use crate::lang_graph::{
     session_keys,
@@ -46,63 +47,44 @@ impl RAGGenerationTask {
 
 #[async_trait]
 impl Task for RAGGenerationTask {
+    #[instrument(name = "rag_generation_task", skip(self, context), fields(session_id))]
     async fn run(&self, context: Context) -> graph_flow::Result<TaskResult> {
         let session_id = context
             .get::<String>("session_id")
             .await
             .unwrap_or_else(|| "unknown".to_string());
-
-        info!("RAGGenerationTask started. Session: {}", session_id);
+        Span::current().record("session_id", &session_id);
+        info!("Starting task");
 
         let reranked_contexts: Vec<(Segment, Vec<VectorSearchResult>)> = context
             .get_sync(session_keys::RERANKED_CONTEXTS)
-            .ok_or_else(|| GraphError::ContextError("No reranked query found".to_string()))?;
+            .ok_or_else(|| GraphError::ContextError("No reranked contexts found".to_string()))?;
 
-        let mut segment_rag_responses = Vec::new();
         if reranked_contexts.is_empty() {
+            info!("No reranked contexts to process. Skipping.");
             context
-                .set(session_keys::RAG_RESPONSE, segment_rag_responses.clone())
+                .set(session_keys::RAG_RESPONSE, Vec::<Segment>::new())
                 .await;
             return Ok(TaskResult::new(
                 Some("No relevant contexts found for RAG generation".to_string()),
                 NextAction::Continue,
             ));
         }
-        for (segment, reranked_result) in &reranked_contexts {
-            info!("Reranked Segment: {}", segment.enhanced);
-            let prompt = format!(
-                "Analyze this GitHub repository query: {}, \n\nContext:\n{}",
-                segment.enhanced,
-                serde_json::to_string(reranked_result)
-                    .unwrap_or_else(|_| "No context available".to_string())
-            );
-            info!(
-                "{}",
-                reranked_result
-                    .iter()
-                    .map(|r| format!(
-                        "ID: {}, Score: {}, Content: {}, metadata: {}",
-                        r.id, r.score, r.content, r.metadata
-                    ))
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            );
 
-            let response = self
-                .agent
-                .chat(&prompt, context.get_rig_messages().await)
-                .await
-                .map_err(|e| GraphError::TaskExecutionFailed(format!("LLM error: {e}")))?;
-            info!("RAG generation response received");
-            info!("RAGGenerationTask finished. Response: {}", response);
-            let rag_response = QualitativeResult {
-                segment_id: segment.id.clone(),
-                generated_response: response,
-                vector_search_results: reranked_result.clone(),
-            };
+        let chat_history = context.get_rig_messages().await;
 
-            segment_rag_responses.push(rag_response);
-        }
+        let futures = reranked_contexts.iter().map(|(segment, results)| {
+            self.generate_for_segment(chat_history.clone(), segment, results)
+        });
+
+        let segment_rag_responses: Vec<QualitativeResult> =
+            join_all(futures).await.into_iter().flatten().collect();
+
+        info!(
+            successful_generations = segment_rag_responses.len(),
+            total_segments = reranked_contexts.len(),
+            "Finished all RAG generations."
+        );
 
         context
             .add_assistant_message(format!(
@@ -113,17 +95,78 @@ impl Task for RAGGenerationTask {
         context
             .set(session_keys::RAG_RESPONSE, segment_rag_responses.clone())
             .await;
-        info!("Context updated with RAG generation response");
+
         Ok(TaskResult::new(
             Some(format!(
-                "RAG generation completed: {} segments, \nSegments: {} ",
-                segment_rag_responses.len(),
-                segment_rag_responses
-                    .iter()
-                    .map(|res| res.generated_response.clone())
-                    .collect::<String>()
+                "RAG generation completed for {} segments.",
+                segment_rag_responses.len()
             )),
             NextAction::Continue,
         ))
+    }
+}
+
+impl RAGGenerationTask {
+    #[instrument(
+        name = "generate_for_segment",
+        skip(self, chat_history, reranked_result),
+        fields(segment_id = %segment.id)
+    )]
+    async fn generate_for_segment(
+        &self,
+        chat_history: Vec<Message>,
+        segment: &Segment,
+        reranked_result: &[VectorSearchResult],
+    ) -> Option<QualitativeResult> {
+        let formatted_context = self.format_contexts_for_prompt(reranked_result);
+        if formatted_context.is_empty() {
+            info!("No context to generate from. Skipping segment.");
+            return None;
+        }
+
+        let prompt = format!(
+            "Based on the following context, please answer the user's query.\n\nUSER QUERY: \"{}\"\n\nCONTEXT:\n{}",
+            segment.enhanced,
+            formatted_context
+        );
+        debug!(%prompt, "Sending generation prompt to LLM");
+
+        match self.agent.chat(&prompt, chat_history).await {
+            Ok(response) => {
+                info!("Successfully generated response for segment.");
+                debug!(%response, "Generated RAG response");
+                Some(QualitativeResult {
+                    segment_id: segment.id.clone(),
+                    generated_response: response,
+                    vector_search_results: reranked_result.to_vec(),
+                })
+            }
+            Err(e) => {
+                error!(error = ?e, "LLM call for RAG generation failed.");
+                None
+            }
+        }
+    }
+
+    fn format_contexts_for_prompt(&self, results: &[VectorSearchResult]) -> String {
+        results
+            .iter()
+            .enumerate()
+            .map(|(i, r)| {
+                let source = r
+                    .metadata
+                    .get("source")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("N/A");
+                format!(
+                    "--- Context {} (Source: {}, Score: {:.2}) ---\n{}\n",
+                    i + 1,
+                    source,
+                    r.score,
+                    r.content
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 }

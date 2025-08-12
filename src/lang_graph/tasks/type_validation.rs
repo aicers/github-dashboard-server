@@ -7,7 +7,7 @@ use rig::{
     providers::{self},
 };
 use serde::{Deserialize, Serialize};
-use tracing::info;
+use tracing::{debug, error, info, instrument, Span};
 
 use crate::lang_graph::{session_keys, types::query::EnhancedQuery};
 
@@ -73,17 +73,24 @@ impl TypeValidationTask {
 
 #[async_trait]
 impl Task for TypeValidationTask {
+    #[instrument(
+        name = "type_validation_task",
+        skip(self, context),
+        fields(session_id, user_query)
+    )]
     async fn run(&self, context: Context) -> graph_flow::Result<TaskResult> {
         let session_id = context
             .get::<String>("session_id")
             .await
             .unwrap_or_else(|| "unknown".to_string());
-
-        info!("TypeValidationTask started. Session: {}", session_id);
+        Span::current().record("session_id", &session_id);
 
         let user_query: String = context
             .get_sync(session_keys::USER_QUERY)
             .ok_or_else(|| GraphError::ContextError("No user query found".to_string()))?;
+        Span::current().record("user_query", &user_query);
+
+        info!("Starting task");
 
         let enhanced_query: EnhancedQuery = context
             .get::<EnhancedQuery>(session_keys::ENHANCED_QUERY)
@@ -91,43 +98,50 @@ impl Task for TypeValidationTask {
             .ok_or_else(|| GraphError::ContextError("No enhanced query found".to_string()))?;
 
         if enhanced_query.segments.is_empty() {
-            info!("No segments to validate. Skipping validation.");
+            info!("No segments to validate. Skipping validation and marking as passed.");
             context.set(session_keys::VALIDATION_PASS, true).await;
             return Ok(TaskResult::new(
                 Some("No segments to validate.".to_string()),
-                NextAction::ContinueAndExecute,
+                NextAction::Continue,
             ));
         }
 
         let generated_segments_json = serde_json::to_string_pretty(&enhanced_query.segments)
             .map_err(|e| {
+                error!(error = ?e, "Failed to serialize segments for validation prompt");
                 GraphError::TaskExecutionFailed(format!("Failed to serialize segments: {e}"))
             })?;
 
         let prompt_with_context = format!(
-            "validate the following.
-            Original User Query: {user_query}
-            Generated Segments: {generated_segments_json}",
+            "validate the following.\nOriginal User Query: {user_query}\nGenerated Segments: {generated_segments_json}",
         );
 
-        let chat_history = context.get_rig_messages().await;
+        debug!(prompt = %prompt_with_context, "Sending validation prompt to LLM");
 
+        let chat_history = context.get_rig_messages().await;
         let response_str = self
             .agent
             .chat(&prompt_with_context, chat_history)
             .await
-            .map_err(|e| GraphError::ContextError(format!("LLM validation error: {e}")))?;
+            .map_err(|e| {
+                error!(error = ?e, "LLM validation API call failed");
+                GraphError::ContextError(format!("LLM validation error: {e}"))
+            })?;
+
+        debug!(raw_response = %response_str, "Received raw validation response");
 
         let validation_response: ValidationResponse =
             serde_json::from_str(&response_str).map_err(|e| {
+                error!(error = ?e, raw_response = %response_str, "Failed to parse validation JSON");
                 GraphError::ContextError(format!(
                     "Validation JSON parse error: {e} - Response was: {response_str}"
                 ))
             })?;
 
         info!(
-            "TypeValidationTask finished. Validation Response: {:?}`",
-            &validation_response,
+            validation_pass = validation_response.is_correct,
+            reason = %validation_response.reason,
+            "Type validation finished"
         );
 
         context
@@ -137,17 +151,17 @@ impl Task for TypeValidationTask {
             )
             .await;
 
-        let result_message = format!(
-            "Type validation complete. Pass: {}. Reason: {}",
-            validation_response.is_correct, validation_response.reason
-        );
-        info!("{}", result_message);
+        let result_message = if validation_response.is_correct {
+            format!("Validation passed: {}", validation_response.reason)
+        } else {
+            format!(
+                "Validation failed, please regenerate segments. Feedback: {}",
+                validation_response.reason
+            )
+        };
 
         context.set("validation_message", &result_message).await;
 
-        Ok(TaskResult::new(
-            Some(result_message),
-            NextAction::ContinueAndExecute,
-        ))
+        Ok(TaskResult::new(Some(result_message), NextAction::Continue))
     }
 }

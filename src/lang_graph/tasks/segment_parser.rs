@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use graph_flow::{Context, GraphError, NextAction, Task, TaskResult};
-use tracing::info;
+use tracing::{info, instrument, warn, Span};
 
 use crate::lang_graph::{session_keys, types::query::EnhancedQuery};
 
@@ -12,15 +12,22 @@ impl SegmentParserTask {
     }
 }
 
+impl Default for SegmentParserTask {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 #[async_trait]
 impl Task for SegmentParserTask {
+    #[instrument(name = "segment_parser_task", skip(self, context), fields(session_id))]
     async fn run(&self, context: Context) -> graph_flow::Result<TaskResult> {
         let session_id = context
             .get::<String>("session_id")
             .await
             .unwrap_or_else(|| "unknown".to_string());
+        Span::current().record("session_id", &session_id);
 
-        info!("SegmentParserTask started. Session: {}", session_id);
+        info!("Starting task");
 
         let enhanced_query: EnhancedQuery = context
             .get::<EnhancedQuery>(session_keys::ENHANCED_QUERY)
@@ -38,8 +45,8 @@ impl Task for SegmentParserTask {
                     quantitative_segments.push(segment.clone());
                     qualitative_segments.push(segment.clone());
                 }
-                _ => {
-                    // info!("Unknown segment type: {}", segment.query_type);
+                unknown_type => {
+                    warn!(%unknown_type, "Ignoring segment with unknown type");
                 }
             }
         }
@@ -58,9 +65,9 @@ impl Task for SegmentParserTask {
             .await;
 
         info!(
-            "SegmentParserTask finished. Quantitative: {}, Qualitative: {}",
-            quantitative_segments.len(),
-            qualitative_segments.len()
+            quantitative_count = quantitative_segments.len(),
+            qualitative_count = qualitative_segments.len(),
+            "Segment parsing finished"
         );
 
         Ok(TaskResult::new(
@@ -69,7 +76,7 @@ impl Task for SegmentParserTask {
                 quantitative_segments.len(),
                 qualitative_segments.len()
             )),
-            NextAction::ContinueAndExecute,
+            NextAction::Continue,
         ))
     }
 }

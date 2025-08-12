@@ -9,7 +9,7 @@ use rig::{
     completion::Chat,
     providers::{self},
 };
-use tracing::info;
+use tracing::{debug, error, info, instrument, Span};
 
 use crate::lang_graph::{session_keys, types::query::Segment};
 
@@ -68,18 +68,18 @@ impl Task for GraphQLGeneratorTask {
         "GraphQLGeneratorTask"
     }
 
+    #[instrument(
+        name = "graphql_generator_task",
+        skip(self, context),
+        fields(session_id)
+    )]
     async fn run(&self, context: Context) -> graph_flow::Result<TaskResult> {
         let session_id = context
             .get::<String>("session_id")
             .await
             .unwrap_or_else(|| "unknown".to_string());
-
-        info!("GraphQLGeneratorTask started. Session: {}", session_id);
-
-        let is_error = context
-            .get::<bool>(session_keys::GRAPHQL_EXECUTE_ERROR)
-            .await
-            .unwrap_or(true);
+        Span::current().record("session_id", &session_id);
+        info!("Starting task");
 
         let segments: Vec<Segment> = context
             .get_sync(session_keys::QUANTITATIVE_SEGMENTS)
@@ -88,6 +88,7 @@ impl Task for GraphQLGeneratorTask {
             })?;
 
         if segments.is_empty() {
+            info!("No quantitative segments to process. Skipping.");
             context
                 .set(session_keys::GRAPHQL_QUERY, String::new())
                 .await;
@@ -97,56 +98,40 @@ impl Task for GraphQLGeneratorTask {
             ));
         }
 
-        let segments_json = serde_json::to_string_pretty(&segments).map_err(|e| {
-            GraphError::TaskExecutionFailed(format!("Segment serialization error: {e}"))
-        })?;
-        let prompt = if is_error {
-            let error_message = context
-                .get::<String>(session_keys::GRAPHQL_RESULT)
-                .await
-                .unwrap_or_default();
+        let is_retry = context
+            .get::<bool>(session_keys::GRAPHQL_EXECUTE_ERROR)
+            .await
+            .unwrap_or(false);
+        let error_message = context.get::<String>(session_keys::GRAPHQL_RESULT).await;
 
-            format!(
-            "Below are multiple parsed segments representing parts of a user's natural language question:\n\
-            {segments_json}\n\n\
-            A GraphQL query was previously generated using similar segments, but it failed with the following error:\n\
-            {error_message}\n\n\
-            Please regenerate the query while strictly adhering to the schema. \
-            Include as many of the segments as possible, but omit any that cannot be fulfilled based on the schema.\n\n\
-            Only return the final GraphQL query. Do not explain."
-            )
-        } else {
-            format!(
-            "Below are multiple parsed segments representing parts of a user's natural language question:\n\
-            {segments_json}\n\n\
-            Generate a **single valid GraphQL query** that includes as many of these segments as possible. \
-            If some segments are not answerable based on the schema, omit them.\n\n\
-            Only return the final GraphQL query. Do not explain."
-                )
-        };
+        let prompt = self.build_prompt(&segments, is_retry, error_message.as_deref())?;
+        debug!(%prompt, "Generated prompt for LLM");
 
         let chat_history = context.get_rig_messages().await;
+        let graphql_query_raw = self.agent.chat(&prompt, chat_history).await.map_err(|e| {
+            error!(error = ?e, "LLM call for GraphQL generation failed");
+            GraphError::TaskExecutionFailed(format!("LLM error: {e}"))
+        })?;
+        debug!(%graphql_query_raw, "Received raw response from LLM");
 
-        let graphql_query = self
-            .agent
-            .chat(&prompt, chat_history)
-            .await
-            .map_err(|e| GraphError::TaskExecutionFailed(format!("LLM error: {e}")))?;
-
-        let cleaned_query = graphql_query
+        let cleaned_query = graphql_query_raw
             .replace("```graphql", "")
             .replace("```", "")
             .trim()
             .to_string();
 
         if cleaned_query == "{}" {
+            info!("LLM determined no valid GraphQL query could be generated. Ending workflow.");
+            context
+                .set(session_keys::GRAPHQL_QUERY, String::new())
+                .await;
             return Ok(TaskResult::new(
                 Some("No valid GraphQL query could be generated.".to_string()),
                 NextAction::End,
             ));
         }
 
-        info!("Generated GraphQL Query : {}", cleaned_query);
+        info!(graphql_query = %cleaned_query, "Successfully generated and cleaned GraphQL query");
 
         context
             .set(session_keys::GRAPHQL_QUERY, cleaned_query.clone())
@@ -162,5 +147,42 @@ impl Task for GraphQLGeneratorTask {
             Some("GraphQL query generated successfully.".to_string()),
             NextAction::Continue,
         ))
+    }
+}
+
+impl GraphQLGeneratorTask {
+    fn build_prompt(
+        &self,
+        segments: &[Segment],
+        is_retry: bool,
+        error_message: Option<&str>,
+    ) -> graph_flow::Result<String> {
+        let segments_json = serde_json::to_string_pretty(segments).map_err(|e| {
+            error!(error = ?e, "Failed to serialize segments for prompt");
+            GraphError::TaskExecutionFailed(format!("Segment serialization error: {e}"))
+        })?;
+
+        let prompt = if is_retry {
+            let err_msg = error_message.unwrap_or("No error message provided.");
+            info!(retry_reason = %err_msg, "Building prompt for retry.");
+            format!(
+                "Below are parsed segments from a user's question:\n\
+                {segments_json}\n\n\
+                A previously generated GraphQL query failed with this error:\n\
+                {err_msg}\n\n\
+                Please regenerate a single, valid GraphQL query that fixes the error while strictly adhering to the schema. \
+                Only use information from the segments provided.\n\n\
+                Respond with ONLY the GraphQL query string."
+            )
+        } else {
+            format!(
+                "Below are parsed segments from a user's question:\n\
+                {segments_json}\n\n\
+                Generate a single, valid GraphQL query that answers as many of these segments as possible. \
+                Omit any segments that cannot be fulfilled by the schema.\n\n\
+                Respond with ONLY the GraphQL query string."
+            )
+        };
+        Ok(prompt)
     }
 }

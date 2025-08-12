@@ -6,7 +6,7 @@ use rig::{
     completion::Chat,
     providers::{self},
 };
-use tracing::info;
+use tracing::{debug, error, info, instrument, Span};
 
 use crate::lang_graph::{
     session_keys,
@@ -20,31 +20,49 @@ pub struct ResponseFormatterTask {
 impl ResponseFormatterTask {
     pub fn new(model: &str) -> Self {
         let client = providers::ollama::Client::new();
-        let agent = client
-            .agent(model)
-            .preamble(
-                "
-                You are an expert assistant that generates final answers by combining both quantitative and qualitative information.
+        let agent = client.agent(model).preamble(
+            r#"You are an expert GitHub assistant. Your final task is to synthesize qualitative insights and quantitative data into a single, cohesive, and well-formatted **Markdown** response.
 
-                Given:
-                - An enhanced user query that may contain quantitative, qualitative, or mixed intents.
-                - RAG (Retrieval-Augmented Generation) qualitative results from vector search.
-                - Quantitative statistics as a JSON string.
+            **Inputs You Will Receive:**
+            - **Original User Query**: The user's initial question.
+            - **Qualitative Summary**: A text summary based on retrieved documents (issues, PRs, etc.). This provides context and narrative.
+            - **Statistical Summary**: A text summary of statistical data derived from GraphQL queries. This provides numbers and metrics.
 
-                Instructions:
-                - For queries that are purely quantitative, produce a concise JSON summary with relevant data.
-                - For purely qualitative queries, generate a coherent, well-structured natural language answer.
-                - For mixed queries, provide a combined response that includes both JSON data and a narrative explanation.
-                - Always ensure the response is clear, accurate, and tailored to the user's original question.
-                - Avoid unnecessary technical jargon or formatting unless requested.
-                - If information is missing, acknowledge it gracefully.
+            **Your Goal:**
+            Combine these inputs into a single, easy-to-read Markdown report. Do not just list the inputs; integrate them into a comprehensive answer.
 
-                Respond only with the formatted answer without extra commentary.
+            **CRITICAL RULES:**
+            1.  **ALWAYS use Markdown** for formatting (headings, lists, bold text, code blocks, etc.).
+            2.  Start with a direct summary answering the user's main question.
+            3.  Use headings (`##`, `###`) to structure different parts of the answer (e.g., "Key Statistics", "Detailed Analysis").
+            4.  Present statistical data clearly, perhaps in bullet points or tables.
+            5.  Seamlessly weave the qualitative summary into the narrative to provide context for the statistics.
+            6.  If either the qualitative or statistical summary is empty or unavailable, gracefully construct the answer using only the information you have.
+            7.  **DO NOT** output raw JSON. Your final output is for human readers.
 
-                ",
-            )
-            .build();
+            ---
+            **EXAMPLE:**
 
+            **--- Inputs ---**
+            **Original User Query**: "How many commits were there last month, and what was the main feature developed?"
+
+            **Qualitative Summary**: "Based on commit messages and PR discussions, the main feature developed last month was the 'New Dashboard V2'. It involved a major UI overhaul and backend API integration. Key PRs include #123 and #135."
+
+            **Statistical Summary**: "Last month, there were a total of 250 commits across all branches. The `main` branch received 85 of these commits."
+
+            **--- Your Output (in Markdown) ---**
+            ## Monthly Development Summary
+
+            Last month, a total of **250 commits** were made to the repository, with a significant focus on developing the **New Dashboard V2**.
+
+            ### Key Statistics
+            - **Total Commits**: 250
+            - **Commits to `main`**: 85
+
+            ### Detailed Analysis
+            The primary feature shipped was the 'New Dashboard V2', which included a major UI overhaul and new backend integrations. This work is primarily documented in Pull Requests #123 and #135. The high commit count reflects the significant effort invested in this feature.
+            "#,
+        ).build();
         Self { agent }
     }
 }
@@ -55,51 +73,80 @@ impl Task for ResponseFormatterTask {
         "ResponseFormatterTask"
     }
 
+    #[instrument(
+        name = "response_formatter_task",
+        skip(self, context),
+        fields(session_id)
+    )]
     async fn run(&self, context: Context) -> graph_flow::Result<TaskResult> {
         let session_id = context
             .get::<String>("session_id")
             .await
             .unwrap_or_else(|| "unknown".to_string());
+        Span::current().record("session_id", &session_id);
+        info!("Starting final response formatting");
 
-        info!("ResponseFormatterTask started. Session: {}", session_id);
-
-        let enchanded_query: EnhancedQuery = context
-            .get::<EnhancedQuery>(session_keys::ENHANCED_QUERY)
+        let enhanced_query: EnhancedQuery = context
+            .get(session_keys::ENHANCED_QUERY)
             .await
             .ok_or_else(|| GraphError::ContextError("No enhanced query found".to_string()))?;
 
-        let rag_response: Vec<QualitativeResult> = context
+        let rag_results: Vec<QualitativeResult> = context
             .get(session_keys::RAG_RESPONSE)
             .await
-            .ok_or_else(|| GraphError::ContextError("No RAG response found".to_string()))?;
+            .unwrap_or_default();
 
         let statistics_response: String = context
-            .get::<String>(session_keys::STATISTICS_RESPONSE)
+            .get(session_keys::STATISTICS_RESPONSE)
             .await
-            .unwrap_or_else(|| "No statistics available".to_string());
+            .unwrap_or_default();
 
-        let prompt = format!(
-            "You are a response formatter. Given the following enhanced query and RAG response, format the response according to the query type.\n\n\
-            Enhanced Query: {}\n\n\
-            RAG Response: {:?}\n\n\
-            Statistics Response: {}\n\n\
-            Format your response as follows:\n\
-            - For Quantitative queries, return a JSON object with relevant data.\n\
-            - For Qualitative queries, return a well-structured text response.\n\
-            - For Mixed queries, combine both formats appropriately.",
-            enchanded_query.original,
-            serde_json::to_string(&rag_response),
-            statistics_response
-        );
+        let prompt = self.build_prompt(&enhanced_query, &rag_results, &statistics_response);
+        debug!(%prompt, "Generated final prompt for formatting");
 
         let chat_history = context.get_rig_messages().await;
-        let response =
-            self.agent.chat(&prompt, chat_history).await.map_err(|_| {
-                GraphError::TaskExecutionFailed("Chat completion failed".to_string())
-            })?;
+        let final_response = self.agent.chat(&prompt, chat_history).await.map_err(|e| {
+            error!(error = ?e, "LLM call for final formatting failed");
+            GraphError::TaskExecutionFailed(format!("Final formatting LLM error: {e}"))
+        })?;
 
-        info!("ResponseFormatterTask finished. Response: {}", response);
+        info!("Successfully generated final formatted response.");
+        debug!(final_response = %final_response, "Final response content");
 
-        Ok(TaskResult::new(Some(response), NextAction::End))
+        Ok(TaskResult::new(Some(final_response), NextAction::End))
+    }
+}
+
+impl ResponseFormatterTask {
+    fn build_prompt(
+        &self,
+        enhanced_query: &EnhancedQuery,
+        rag_results: &[QualitativeResult],
+        statistics_response: &str,
+    ) -> String {
+        let qualitative_summary = rag_results
+            .iter()
+            .map(|r| r.generated_response.clone())
+            .collect::<Vec<_>>()
+            .join("\n\n");
+
+        format!(
+            "Synthesize the following information into a single, cohesive Markdown response.\n\n\
+            --- Inputs ---\n\
+            **Original User Query**: \"{}\"\n\n\
+            **Qualitative Summary**: \"{}\"\n\n\
+            **Statistical Summary**: \"{}\"",
+            enhanced_query.original,
+            if qualitative_summary.is_empty() {
+                "N/A"
+            } else {
+                &qualitative_summary
+            },
+            if statistics_response.is_empty() {
+                "N/A"
+            } else {
+                statistics_response
+            }
+        )
     }
 }
