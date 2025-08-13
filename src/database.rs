@@ -11,7 +11,7 @@ pub(crate) use discussion::DiscussionDbSchema;
 
 use crate::{
     api::{issue::Issue, pull_request::PullRequest},
-    outbound::{GitHubIssue, GitHubPullRequests},
+    outbound::{GitHubIssue, GitHubPullRequestNode},
 };
 
 const GLOBAL_PARTITION_NAME: &str = "global";
@@ -101,17 +101,13 @@ impl Database {
 
     pub(crate) fn insert_pull_requests(
         &self,
-        resp: Vec<GitHubPullRequests>,
+        resp: Vec<GitHubPullRequestNode>,
         owner: &str,
         name: &str,
     ) -> Result<()> {
         for item in resp {
             let keystr: String = format!("{owner}/{name}#{}", item.number);
-            Database::insert(
-                &keystr,
-                (&item.title, &item.assignees, &item.reviewers),
-                &self.pull_request_partition,
-            )?;
+            Database::insert(&keystr, item, &self.pull_request_partition)?;
         }
         Ok(())
     }
