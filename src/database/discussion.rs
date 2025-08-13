@@ -1,6 +1,7 @@
 use std::num::TryFromIntError;
 
 use anyhow::Result;
+use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 
 use super::{Database, Iter};
@@ -20,17 +21,17 @@ use crate::outbound::discussions::{
     ReactionContent,
 };
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 pub struct DiscussionDbSchema {
     pub(crate) number: i32,
     pub(crate) title: String,
     pub(crate) author: String,
     pub(crate) body: String,
     pub(crate) url: String,
-    pub(crate) created_at: String,
-    pub(crate) updated_at: String,
+    pub(crate) created_at: Timestamp,
+    pub(crate) updated_at: Timestamp,
     pub(crate) is_answered: bool,
-    pub(crate) answer_chosen_at: Option<String>,
+    pub(crate) answer_chosen_at: Option<Timestamp>,
     pub(crate) answer: Option<Answer>,
     pub(crate) category: Category,
     pub(crate) labels: Option<Labels>,
@@ -41,14 +42,14 @@ pub struct DiscussionDbSchema {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Answer {
     pub(crate) body: String,
-    pub(crate) created_at: String,
-    pub(crate) updated_at: String,
+    pub(crate) created_at: Timestamp,
+    pub(crate) updated_at: Timestamp,
     pub(crate) url: String,
     pub(crate) author: String,
     pub(crate) replies: Replies,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 pub struct Category {
     pub(crate) name: String,
 }
@@ -58,7 +59,7 @@ pub struct Labels {
     pub(crate) nodes: Vec<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 pub struct Comments {
     pub(crate) total_count: i32,
     pub(crate) nodes: Vec<Comment>,
@@ -68,20 +69,20 @@ pub struct Comments {
 pub struct Comment {
     pub(crate) body: String,
     pub(crate) author: String,
-    pub(crate) created_at: String,
-    pub(crate) updated_at: String,
-    pub(crate) deleted_at: Option<String>,
+    pub(crate) created_at: Timestamp,
+    pub(crate) updated_at: Timestamp,
+    pub(crate) deleted_at: Option<Timestamp>,
     pub(crate) is_answer: bool,
     pub(crate) is_minimized: bool,
-    pub(crate) last_edited_at: Option<String>,
-    pub(crate) published_at: Option<String>,
+    pub(crate) last_edited_at: Option<Timestamp>,
+    pub(crate) published_at: Option<Timestamp>,
     pub(crate) reactions: Reactions,
     pub(crate) replies: Replies,
     pub(crate) upvote_count: i32,
     pub(crate) url: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 pub struct Reactions {
     pub(crate) total_count: i32,
     pub(crate) nodes: Vec<Reaction>,
@@ -90,7 +91,7 @@ pub struct Reactions {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Reaction {
     pub(crate) content: ReactionContent,
-    pub(crate) created_at: String,
+    pub(crate) created_at: Timestamp,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -102,8 +103,8 @@ pub struct Replies {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Reply {
     pub(crate) body: String,
-    pub(crate) created_at: String,
-    pub(crate) updated_at: String,
+    pub(crate) created_at: Timestamp,
+    pub(crate) updated_at: Timestamp,
     pub(crate) is_answer: bool,
     pub(crate) author: String,
 }
@@ -149,10 +150,10 @@ impl TryFrom<DiscussionsRepositoryDiscussionsNodes> for DiscussionDbSchema {
             author,
             body: discussion.body,
             url: discussion.url,
-            created_at: discussion.created_at.to_string(),
-            updated_at: discussion.updated_at.to_string(),
+            created_at: discussion.created_at,
+            updated_at: discussion.updated_at,
             is_answered: discussion.is_answered.unwrap_or(false),
-            answer_chosen_at: discussion.answer_chosen_at.map(|dt| dt.to_string()),
+            answer_chosen_at: discussion.answer_chosen_at,
             answer,
             category: Category {
                 name: discussion.category.name,
@@ -174,8 +175,8 @@ impl TryFrom<DiscussionsRepositoryDiscussionsNodesAnswer> for Answer {
         };
         Ok(Self {
             body: answer.body,
-            created_at: answer.created_at.to_string(),
-            updated_at: answer.updated_at.to_string(),
+            created_at: answer.created_at,
+            updated_at: answer.updated_at,
             url: answer.url,
             author,
             replies: Replies::try_from(answer.replies)?,
@@ -218,13 +219,13 @@ impl TryFrom<DiscussionsRepositoryDiscussionsNodesCommentsNodes> for Comment {
         Ok(Self {
             body: comment.body,
             author,
-            created_at: comment.created_at.to_string(),
-            updated_at: comment.updated_at.to_string(),
-            deleted_at: comment.deleted_at.map(|dt| dt.to_string()),
+            created_at: comment.created_at,
+            updated_at: comment.updated_at,
+            deleted_at: comment.deleted_at,
             is_answer: comment.is_answer,
             is_minimized: comment.is_minimized,
-            last_edited_at: comment.last_edited_at.map(|dt| dt.to_string()),
-            published_at: comment.published_at.map(|dt| dt.to_string()),
+            last_edited_at: comment.last_edited_at,
+            published_at: comment.published_at,
             reactions: Reactions::try_from(comment.reactions)?,
             replies: Replies::try_from(comment.replies)?,
             upvote_count: i32::try_from(comment.upvote_count)?,
@@ -259,7 +260,7 @@ impl TryFrom<DiscussionsRepositoryDiscussionsNodesReactions> for Reactions {
             .flatten()
             .map(|reaction| Reaction {
                 content: reaction.content,
-                created_at: reaction.created_at.to_string(),
+                created_at: reaction.created_at,
             })
             .collect();
         Ok(Self {
@@ -290,8 +291,8 @@ impl TryFrom<DiscussionsRepositoryDiscussionsNodesAnswerReplies> for Replies {
 
                 Reply {
                     body: reply.body,
-                    created_at: reply.created_at.to_string(),
-                    updated_at: reply.updated_at.to_string(),
+                    created_at: reply.created_at,
+                    updated_at: reply.updated_at,
                     is_answer: reply.is_answer,
                     author,
                 }
@@ -317,7 +318,7 @@ impl TryFrom<DiscussionsRepositoryDiscussionsNodesCommentsNodesReactions> for Re
             .flatten()
             .map(|reaction| Reaction {
                 content: reaction.content,
-                created_at: reaction.created_at.to_string(),
+                created_at: reaction.created_at,
             })
             .collect();
         Ok(Self {
@@ -350,8 +351,8 @@ impl TryFrom<DiscussionsRepositoryDiscussionsNodesCommentsNodesReplies> for Repl
 
                 Reply {
                     body: reply.body,
-                    created_at: reply.created_at.to_string(),
-                    updated_at: reply.updated_at.to_string(),
+                    created_at: reply.created_at,
+                    updated_at: reply.updated_at,
                     is_answer: reply.is_answer,
                     author,
                 }

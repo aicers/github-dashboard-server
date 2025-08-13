@@ -36,11 +36,8 @@ impl IssueStatFilter {
                     && self
                         .begin
                         .as_ref()
-                        .is_none_or(|begin| issue.created_at.0 >= begin.0)
-                    && self
-                        .end
-                        .as_ref()
-                        .is_none_or(|end| issue.created_at.0 < end.0)
+                        .is_none_or(|begin| issue.created_at >= *begin)
+                    && self.end.as_ref().is_none_or(|end| issue.created_at < *end)
                     && self
                         .assignee
                         .as_ref()

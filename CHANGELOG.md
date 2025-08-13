@@ -20,6 +20,10 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   timestamps, and project-related metadata.
 - Exposed a new `discussions` query in the server’s GraphQL API to query the
   stored discussion data.
+- Added a new GraphQL API: `discussionStat` query, allowing users to filter
+  discussions by `author`, `repo` (repository name), `begin`, and `end`
+  (creation date range). The query returns the `totalCount` field, indicating
+  the number of discussions.
 
 ### Changed
 
