@@ -29,7 +29,7 @@ async fn main() -> Result<()> {
     let repositories = Arc::new(settings.repositories);
 
     let database = Database::connect(&settings.database.db_path)
-        .context("Problem while Connect Sled Database.")?;
+        .context("Problem while Connect Fjall Database.")?;
 
     check_key(&database.clone())
         .await
