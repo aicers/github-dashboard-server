@@ -65,7 +65,7 @@ pub struct Comments {
     pub(crate) nodes: Vec<Comment>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 pub struct Comment {
     pub(crate) body: String,
     pub(crate) author: String,
@@ -94,7 +94,7 @@ pub struct Reaction {
     pub(crate) created_at: Timestamp,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 pub struct Replies {
     pub(crate) total_count: i32,
     pub(crate) nodes: Vec<Reply>,
