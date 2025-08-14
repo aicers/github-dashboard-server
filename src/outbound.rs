@@ -180,12 +180,9 @@ pub(super) async fn fetch_periodically(
                 match send_github_issue_query(&repoinfo.owner, &repoinfo.name, &since, &token).await
                 {
                     Ok(resps) => {
-                        for resp in resps {
-                            if let Err(error) =
-                                db.insert_issues(resp, &repoinfo.owner, &repoinfo.name)
-                            {
-                                error!("Problem while insert Fjall Database. {}", error);
-                            }
+                        if let Err(error) = db.insert_issues(resps, &repoinfo.owner, &repoinfo.name)
+                        {
+                            error!("Problem while insert Fjall Database. {}", error);
                         }
                         break;
                     }
@@ -201,12 +198,10 @@ pub(super) async fn fetch_periodically(
                 re_itv.tick().await;
                 match send_github_pr_query(&repoinfo.owner, &repoinfo.name, &token).await {
                     Ok(resps) => {
-                        for resp in resps {
-                            if let Err(error) =
-                                db.insert_pull_requests(resp, &repoinfo.owner, &repoinfo.name)
-                            {
-                                error!("Problem while insert Fjall Database. {}", error);
-                            }
+                        if let Err(error) =
+                            db.insert_pull_requests(resps, &repoinfo.owner, &repoinfo.name)
+                        {
+                            error!("Problem while insert Fjall Database. {}", error);
                         }
                         break;
                     }
@@ -244,7 +239,7 @@ async fn send_github_issue_query(
     name: &str,
     since: &str,
     token: &str,
-) -> Result<Vec<Vec<GitHubIssue>>> {
+) -> Result<Vec<GitHubIssue>> {
     let mut total_issue = Vec::new();
     let mut end_cursor: Option<String> = None;
     loop {
@@ -261,9 +256,9 @@ async fn send_github_issue_query(
             send_query::<Issues>(token, var).await?.json().await?;
 
         let issue_resp = GitHubIssueResponse::try_from(resp_body)?;
+        total_issue.extend(issue_resp.issues);
 
         if !issue_resp.has_next_page {
-            total_issue.push(issue_resp.issues);
             break;
         }
         end_cursor = issue_resp.end_cursor;
@@ -276,8 +271,8 @@ async fn send_github_pr_query(
     owner: &str,
     name: &str,
     token: &str,
-) -> Result<Vec<Vec<GitHubPullRequestNode>>> {
-    let mut total_prs = Vec::new();
+) -> Result<Vec<GitHubPullRequestNode>> {
+    let mut prs: Vec<GitHubPullRequestNode> = Vec::new();
     let mut end_cur: Option<String> = None;
     loop {
         let var = pull_requests::Variables {
@@ -294,7 +289,6 @@ async fn send_github_pr_query(
         if let Some(data) = resp_body.data {
             if let Some(repository) = data.repository {
                 if let Some(nodes) = repository.pull_requests.nodes {
-                    let mut prs = Vec::new();
                     for pr in nodes.into_iter().flatten() {
                         let mut assignees_list = Vec::new();
                         if let Some(ass_nodes) = pr.assignees.nodes {
@@ -457,7 +451,6 @@ async fn send_github_pr_query(
                         });
                     }
                     if !repository.pull_requests.page_info.has_next_page {
-                        total_prs.push(prs);
                         break;
                     }
                     end_cur = repository.pull_requests.page_info.end_cursor;
@@ -469,7 +462,7 @@ async fn send_github_pr_query(
         }
         bail!("Failed to parse response data");
     }
-    Ok(total_prs)
+    Ok(prs)
 }
 
 async fn send_github_discussion_query(
