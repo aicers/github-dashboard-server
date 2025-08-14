@@ -38,6 +38,8 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Config file must now be specified with `-c <CONFIG_PATH>`.
 - `--key` and `--cert` are now required as CLI options instead of being set in
   the config file.
+- Standardized return types of `send_github_issue_query` and `send_github_pr_query`
+  to `Result<Vec<...>>`, matching `send_github_discussion_query`.
 
 ### Fixed
 
