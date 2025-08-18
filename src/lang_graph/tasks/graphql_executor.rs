@@ -26,7 +26,6 @@ impl Task for GraphQLExecutorTask {
             .get::<String>("session_id")
             .await
             .unwrap_or_else(|| "unknown".to_string());
-        let schema = crate::api::schema_origin(self.database.clone());
         Span::current().record("session_id", &session_id);
         info!("Starting task");
 
@@ -84,7 +83,7 @@ impl Task for GraphQLExecutorTask {
 
         let result_json = serde_json::to_value(&execution_result.data).map_err(|e| {
             error!(error = ?e, "Failed to serialize successful GraphQL result to JSON");
-            GraphError::TaskExecutionFailed(format!("Result serialization error: {}", e))
+            GraphError::TaskExecutionFailed(format!("Result serialization error: {e}"))
         })?;
 
         debug!(result = ?result_json, "Serialized execution data");

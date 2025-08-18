@@ -50,7 +50,7 @@ impl StatisticsResponseTask {
 
 #[async_trait]
 impl Task for StatisticsResponseTask {
-    fn id(&self) -> &str {
+    fn id(&self) -> &'static str {
         "StatisticsResponseTask"
     }
 

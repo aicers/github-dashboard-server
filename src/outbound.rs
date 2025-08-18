@@ -342,7 +342,13 @@ pub(super) async fn fetch_periodically(
                 match send_github_pr_query(&repoinfo.owner, &repoinfo.name, &token).await {
                     Ok(resps) => {
                         for resp in resps {
-                            //TODO:
+                            let _ = add_documents(
+                                &repoinfo.owner,
+                                &repoinfo.name,
+                                &resp,
+                                DocumentType::PullRequest,
+                            )
+                            .await;
                             if let Err(error) =
                                 db.insert_pull_requests(resp, &repoinfo.owner, &repoinfo.name)
                             {

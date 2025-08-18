@@ -23,7 +23,7 @@ impl ContextRerankTask {
         let agent = client
             .agent(model)
             .preamble(
-                r#"You are a context reranking specialist. Your ONLY task is to reorder a given JSON array of documents based on their relevance to a user's query.
+                r"You are a context reranking specialist. Your ONLY task is to reorder a given JSON array of documents based on their relevance to a user's query.
 
                 You will be given a `USER_QUERY` and a JSON array of `DOCUMENTS_TO_RERANK`.
                 Your goal is to return the exact same array, with the documents rearranged from most relevant to least relevant.
@@ -34,7 +34,7 @@ impl ContextRerankTask {
                 3.  **NO EXTRA TEXT**: Do not include explanations, apologies, commentary, or markdown formatting like ```json.
 
                 **Reorder the provided documents and output nothing but the raw, reordered JSON array.**
-                "#,
+                ",
             )
             .build();
 
