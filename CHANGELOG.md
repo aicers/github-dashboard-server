@@ -27,6 +27,10 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   (creation date range). The query returns the following fields:
   - `totalCount`: The total number of discussions.
   - `commentCount`: The total number of comments across all discussions.
+- Added a new GraphQL API: `pullRequestStat` query, allowing users to filter
+  pull requests by `author`, `repo` (repository name), `begin`, and `end`
+  (creation date range). The query returns the `openPrCount` field, indicating
+  the number of open pull requests.
 
 ### Changed
 

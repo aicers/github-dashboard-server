@@ -3,6 +3,7 @@ pub(crate) mod discussion_stat;
 pub(crate) mod issue;
 pub(crate) mod issue_stat;
 pub(crate) mod pull_request;
+pub(crate) mod pull_request_stat;
 
 use std::fmt::Display;
 
@@ -26,11 +27,12 @@ const DEFAULT_PAGE_SIZE: usize = 100;
 /// This is exposed only for [`Schema`], and not used directly.
 #[derive(Default, MergedObject)]
 pub(crate) struct Query(
-    issue::IssueQuery,
-    pull_request::PullRequestQuery,
-    issue_stat::IssueStatQuery,
-    discussion_stat::DiscussionStatQuery,
     discussion::DiscussionQuery,
+    discussion_stat::DiscussionStatQuery,
+    issue::IssueQuery,
+    issue_stat::IssueStatQuery,
+    pull_request::PullRequestQuery,
+    pull_request_stat::PullRequestStatQuery,
 );
 
 pub(crate) type Schema = async_graphql::Schema<Query, EmptyMutation, EmptySubscription>;
