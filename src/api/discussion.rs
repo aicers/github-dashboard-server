@@ -22,6 +22,7 @@ pub(crate) struct Discussion {
     pub(crate) title: String,
     pub(crate) author: String,
     pub(crate) created_at: DateTimeUtc,
+    pub(crate) comments: Vec<DiscussionComment>,
 }
 
 impl Discussion {
@@ -33,8 +34,23 @@ impl Discussion {
             title: schema.title,
             author: schema.author,
             created_at: DateTimeUtc(schema.created_at),
+            comments: schema
+                .comments
+                .nodes
+                .into_iter()
+                .map(|c| DiscussionComment {
+                    author: c.author,
+                    created_at: DateTimeUtc(c.created_at),
+                })
+                .collect(),
         }
     }
+}
+
+#[derive(SimpleObject)]
+pub(crate) struct DiscussionComment {
+    pub(crate) author: String,
+    pub(crate) created_at: DateTimeUtc,
 }
 
 #[derive(Default)]
