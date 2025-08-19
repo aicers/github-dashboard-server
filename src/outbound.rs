@@ -59,7 +59,7 @@ pub(crate) struct Issues;
     query_path = "src/outbound/graphql/pull_requests.graphql",
     response_derives = "Debug, Clone"
 )]
-struct PullRequests;
+pub(crate) struct PullRequests;
 
 #[derive(GraphQLQuery)]
 #[graphql(

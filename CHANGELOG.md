@@ -15,17 +15,22 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   `assignee`, `author`, `repo`(repository name), `begin` and `end` (creation
   date range). The query returns the `openIssueCount` field, indicating the
   number of open issues.
-- Added additional fields to the `issues` GraphQL query, providing detailed information
-  such as comments, labels, related sub-issues, linked pull requests, issue descriptions,
-  timestamps, and project-related metadata.
+- Added additional fields to the `issues` GraphQL query, providing detailed
+  information such as comments, labels, related sub-issues, linked pull
+  requests, issue descriptions, timestamps, and project-related metadata.
 - Exposed a new `discussions` query in the server’s GraphQL API to query the
   stored discussion data.
-- Added new fields to the `PullRequests` GraphQL query and corresponding fields to
-  the `api::pull_request::PullRequest` struct.
+- Added new fields to the `PullRequests` GraphQL query and corresponding fields
+  to the `api::pull_request::PullRequest` struct.
 - Added a new GraphQL API: `discussionStat` query, allowing users to filter
   discussions by `author`, `repo` (repository name), `begin`, and `end`
-  (creation date range). The query returns the `totalCount` field, indicating
-  the number of discussions.
+  (creation date range). The query returns the following fields:
+  - `totalCount`: The total number of discussions.
+  - `commentCount`: The total number of comments across all discussions.
+- Added a new GraphQL API: `pullRequestStat` query, allowing users to filter
+  pull requests by `author`, `repo` (repository name), `begin`, and `end`
+  (creation date range). The query returns the `openPrCount` field, indicating
+  the number of open pull requests.
 
 ### Changed
 
