@@ -32,6 +32,8 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   (creation date range). The query returns the following fields:
   - `openPrCount`: The number of open pull requests.
   - `mergedPrCount`: The number of merged pull requests.
+  - `avgReviewCommentCount`: The average number of reviews and comments per
+    merged pull request.
 
 ### Changed
 
