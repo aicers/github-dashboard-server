@@ -47,6 +47,8 @@ pub(super) struct PullRequestStatQuery {}
 struct PullRequestStat {
     /// The number of open pull requests.
     open_pr_count: i32,
+    /// The number of merged pull requests.
+    merged_pr_count: i32,
 }
 
 #[Object]
@@ -66,7 +68,16 @@ impl PullRequestStatQuery {
             .count()
             .try_into()?;
 
-        Ok(PullRequestStat { open_pr_count })
+        let merged_pr_count = filtered
+            .iter()
+            .filter(|pr| matches!(pr.state, PullRequestState::MERGED))
+            .count()
+            .try_into()?;
+
+        Ok(PullRequestStat {
+            open_pr_count,
+            merged_pr_count,
+        })
     }
 }
 
@@ -102,10 +113,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn open_pr_count_by_author() {
+    async fn pr_count_by_author() {
         let schema = TestSchema::new();
-        let mut prs = create_pull_requests(3);
+        let mut prs = create_pull_requests(4);
         prs[0].author = "foo".to_string();
+        prs[1].author = "foo".to_string();
+        prs[1].state = crate::outbound::PRPullRequestState::MERGED;
+        prs[2].state = crate::outbound::PRPullRequestState::MERGED;
+        prs[3].state = crate::outbound::PRPullRequestState::CLOSED;
+
         schema
             .db
             .insert_pull_requests(prs, "aicers", "github-dashboard-server")
@@ -115,18 +131,23 @@ mod tests {
         {
             pullRequestStat(filter: {author: "foo"}) {
                 openPrCount
+                mergedPrCount
             }
         }"#;
         let data = schema.execute(query).await.data.into_json().unwrap();
         assert_eq!(data["pullRequestStat"]["openPrCount"], 1);
+        assert_eq!(data["pullRequestStat"]["mergedPrCount"], 1);
     }
 
     #[tokio::test]
-    async fn open_pr_count_by_begin_end() {
+    async fn pr_count_by_begin_end() {
         let schema = TestSchema::new();
-        let mut prs = create_pull_requests(3);
+        let mut prs = create_pull_requests(4);
         prs[1].created_at = parse("2025-01-05T00:00:00Z");
+        prs[1].state = crate::outbound::PRPullRequestState::MERGED;
         prs[2].created_at = parse("2025-01-06T00:00:00Z");
+        prs[3].created_at = parse("2025-01-06T00:00:00Z");
+        prs[3].state = crate::outbound::PRPullRequestState::MERGED;
 
         schema
             .db
@@ -137,50 +158,62 @@ mod tests {
         {
             pullRequestStat(filter: {begin: "2025-01-06T00:00:00Z"}) {
                 openPrCount
+                mergedPrCount
             }
         }"#;
         let data = schema.execute(query).await.data.into_json().unwrap();
         assert_eq!(data["pullRequestStat"]["openPrCount"], 1);
+        assert_eq!(data["pullRequestStat"]["mergedPrCount"], 1);
 
         let query = r#"
         {
             pullRequestStat(filter: {begin: "2025-01-05T00:00:00Z", end: "2025-01-06T00:00:00Z"}) {
                 openPrCount
+                mergedPrCount
             }
         }"#;
         let data = schema.execute(query).await.data.into_json().unwrap();
-
-        assert_eq!(data["pullRequestStat"]["openPrCount"], 1);
+        assert_eq!(data["pullRequestStat"]["openPrCount"], 0);
+        assert_eq!(data["pullRequestStat"]["mergedPrCount"], 1);
     }
 
     #[tokio::test]
-    async fn open_pr_count_by_author_and_dates() {
+    async fn pr_count_by_author_and_dates() {
         let schema = TestSchema::new();
-        let mut prs = create_pull_requests(3);
+        let mut prs = create_pull_requests(4);
         prs[1].author = "foo".to_string();
         prs[1].created_at = parse("2025-01-05T00:00:00Z");
         prs[2].created_at = parse("2025-01-06T00:00:00Z");
+        prs[3].author = "foo".to_string();
+        prs[3].created_at = parse("2025-01-05T00:00:00Z");
+        prs[3].state = crate::outbound::PRPullRequestState::MERGED;
 
         schema
             .db
             .insert_pull_requests(prs, "aicers", "github-dashboard-server")
             .unwrap();
+
         let query = r#"
         {
             pullRequestStat(filter: {author: "foo", begin: "2025-01-05T00:00:00Z", end: "2025-01-06T00:00:00Z"}) {
                 openPrCount
+                mergedPrCount
             }
         }"#;
         let data = schema.execute(query).await.data.into_json().unwrap();
-
         assert_eq!(data["pullRequestStat"]["openPrCount"], 1);
+        assert_eq!(data["pullRequestStat"]["mergedPrCount"], 1);
     }
 
     #[tokio::test]
-    async fn open_pr_count_by_repo() {
+    async fn pr_count_by_repo() {
         let schema = TestSchema::new();
-        let server_prs = create_pull_requests_for_repo(2, "aicers", "github-dashboard-server");
-        let client_prs = create_pull_requests_for_repo(1, "aicers", "github-dashboard-client");
+        let mut server_prs = create_pull_requests_for_repo(2, "aicers", "github-dashboard-server");
+        let mut client_prs = create_pull_requests_for_repo(3, "aicers", "github-dashboard-client");
+
+        server_prs[0].state = crate::outbound::PRPullRequestState::MERGED;
+        client_prs[1].state = crate::outbound::PRPullRequestState::MERGED;
+        client_prs[2].state = crate::outbound::PRPullRequestState::CLOSED;
 
         schema
             .db
@@ -190,23 +223,30 @@ mod tests {
             .db
             .insert_pull_requests(client_prs, "aicers", "github-dashboard-client")
             .unwrap();
+
         let query = r#"
         {
             pullRequestStat(filter: {repo: "github-dashboard-client"}) {
                 openPrCount
+                mergedPrCount
             }
         }"#;
         let data = schema.execute(query).await.data.into_json().unwrap();
-
         assert_eq!(data["pullRequestStat"]["openPrCount"], 1);
+        assert_eq!(data["pullRequestStat"]["mergedPrCount"], 1);
     }
 
     #[tokio::test]
-    async fn open_pr_count_by_repo_and_author() {
+    async fn pr_count_by_repo_and_author() {
         let schema = TestSchema::new();
-        let server_prs = create_pull_requests_for_repo(1, "aicers", "github-dashboard-server");
-        let mut client_prs = create_pull_requests_for_repo(2, "aicers", "github-dashboard-client");
+        let mut server_prs = create_pull_requests_for_repo(1, "aicers", "github-dashboard-server");
+        let mut client_prs = create_pull_requests_for_repo(3, "aicers", "github-dashboard-client");
+
+        server_prs[0].state = crate::outbound::PRPullRequestState::MERGED;
         client_prs[1].author = "foo".to_string();
+        client_prs[2].author = "foo".to_string();
+        client_prs[2].state = crate::outbound::PRPullRequestState::MERGED;
+
         schema
             .db
             .insert_pull_requests(server_prs, "aicers", "github-dashboard-server")
@@ -220,18 +260,21 @@ mod tests {
         {
             pullRequestStat(filter: {repo: "github-dashboard-client", author: "foo"}) {
                 openPrCount
+                mergedPrCount
             }
         }"#;
         let data = schema.execute(query).await.data.into_json().unwrap();
         assert_eq!(data["pullRequestStat"]["openPrCount"], 1);
+        assert_eq!(data["pullRequestStat"]["mergedPrCount"], 1);
     }
 
     #[tokio::test]
-    async fn open_pr_count_with_closed_prs() {
+    async fn pr_count_with_different_states() {
         let schema = TestSchema::new();
-        let mut prs = create_pull_requests(3);
+        let mut prs = create_pull_requests(4);
         prs[1].state = crate::outbound::PRPullRequestState::CLOSED;
         prs[2].state = crate::outbound::PRPullRequestState::MERGED;
+        prs[3].state = crate::outbound::PRPullRequestState::MERGED;
 
         schema
             .db
@@ -242,16 +285,20 @@ mod tests {
         {
             pullRequestStat(filter: {}) {
                 openPrCount
+                mergedPrCount
             }
         }";
         let data = schema.execute(query).await.data.into_json().unwrap();
         assert_eq!(data["pullRequestStat"]["openPrCount"], 1);
+        assert_eq!(data["pullRequestStat"]["mergedPrCount"], 2);
     }
 
     #[tokio::test]
-    async fn open_pr_count_no_matches() {
+    async fn pr_count_no_matches() {
         let schema = TestSchema::new();
-        let prs = create_pull_requests(2);
+        let mut prs = create_pull_requests(2);
+        prs[0].state = crate::outbound::PRPullRequestState::MERGED;
+        prs[1].state = crate::outbound::PRPullRequestState::MERGED;
 
         schema
             .db
@@ -262,23 +309,27 @@ mod tests {
         {
             pullRequestStat(filter: {author: \"nonexistent\"}) {
                 openPrCount
+                mergedPrCount
             }
         }";
         let data = schema.execute(query).await.data.into_json().unwrap();
         assert_eq!(data["pullRequestStat"]["openPrCount"], 0);
+        assert_eq!(data["pullRequestStat"]["mergedPrCount"], 0);
     }
 
     #[tokio::test]
-    async fn open_pr_count_empty_database() {
+    async fn pr_count_empty_database() {
         let schema = TestSchema::new();
 
         let query = "
         {
             pullRequestStat(filter: {}) {
                 openPrCount
+                mergedPrCount
             }
         }";
         let data = schema.execute(query).await.data.into_json().unwrap();
         assert_eq!(data["pullRequestStat"]["openPrCount"], 0);
+        assert_eq!(data["pullRequestStat"]["mergedPrCount"], 0);
     }
 }
