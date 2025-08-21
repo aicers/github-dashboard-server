@@ -49,6 +49,7 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Returns an error instead of an issue or pull request with "No title" as the
   title when the issue database contains an invalid key.
 - No longer panics when the database contains an invalid value.
+- Changed to always collect issues from `GitHubIssueResponse`, regardless of `has_next_page`.
 
 ## [0.1.0] - 2022-09-06
 
