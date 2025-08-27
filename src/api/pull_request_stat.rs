@@ -1,5 +1,6 @@
 use anyhow::Context as AnyhowContext;
 use async_graphql::{Context, InputObject, Object, Result, SimpleObject};
+use jiff::{SpanTotal, Unit};
 use num_traits::ToPrimitive;
 
 use crate::{
@@ -45,10 +46,6 @@ impl PullRequestStatFilter {
 #[derive(Default)]
 pub(super) struct PullRequestStatQuery {}
 
-/// `allow(clippy::struct_field_names)`: This warning is triggered by `_count` suffix in field
-/// names. In #222, an `avgMergeDays` field will be added to this struct, allowing us to remove this
-/// lint allowance.
-#[allow(clippy::struct_field_names)]
 #[derive(SimpleObject)]
 struct PullRequestStat {
     /// The number of open pull requests.
@@ -59,6 +56,8 @@ struct PullRequestStat {
     ///
     /// This field is `None` if there are no merged pull requests.
     avg_review_comment_count: Option<f64>,
+    /// The average number of days taken to merge pull requests.
+    avg_merge_days: Option<f64>,
 }
 
 #[Object]
@@ -102,10 +101,34 @@ impl PullRequestStatQuery {
             )
         };
 
+        let valid_merge_days: Vec<f64> = merged_prs
+            .iter()
+            .filter_map(|pr| {
+                let merged_at = pr.merged_at?;
+                let span = pr.created_at.0.until(merged_at.0).ok()?;
+                let days = span
+                    .total(SpanTotal::from(Unit::Day).days_are_24_hours())
+                    .ok()?;
+                Some(days)
+            })
+            .collect();
+
+        let avg_merge_days: Option<f64> = if valid_merge_days.is_empty() {
+            None
+        } else {
+            let count = valid_merge_days
+                .len()
+                .to_f64()
+                .context("Failed to convert usize to f64")?;
+            let total_days: f64 = valid_merge_days.iter().sum();
+            Some(total_days / count)
+        };
+
         Ok(PullRequestStat {
             open_pr_count,
             merged_pr_count,
             avg_review_comment_count,
+            avg_merge_days,
         })
     }
 }
@@ -638,5 +661,71 @@ mod tests {
         assert_eq!(data["pullRequestStat"]["openPrCount"], 2);
         // Average: (3 + 7) / 2 = 5.0
         assert_eq!(data["pullRequestStat"]["avgReviewCommentCount"], 5.0);
+    }
+
+    #[tokio::test]
+    async fn avg_merge_days_calculation() {
+        let schema = TestSchema::new();
+        let mut prs = create_pull_requests(3);
+
+        // MERGED PR 1: 2 days and 2 hours = 2.0833... days
+        prs[0].state = crate::outbound::PRPullRequestState::MERGED;
+        prs[0].created_at = parse("2025-08-01T10:00:00Z");
+        prs[0].merged_at = Some(parse("2025-08-03T12:00:00Z"));
+
+        // MERGED PR 2: 4 days and 23 hours = 4.9583... days
+        prs[1].state = crate::outbound::PRPullRequestState::MERGED;
+        prs[1].created_at = parse("2025-08-10T00:00:00Z");
+        prs[1].merged_at = Some(parse("2025-08-14T23:00:00Z"));
+
+        // OPEN PR (Not included in calculation)
+        prs[2].state = crate::outbound::PRPullRequestState::OPEN;
+        prs[2].created_at = parse("2025-08-20T00:00:00Z");
+
+        schema
+            .db
+            .insert_pull_requests(prs, "aicers", "github-dashboard-server")
+            .unwrap();
+
+        let query = "
+    {
+        pullRequestStat(filter: {}) {
+            avgMergeDays
+        }
+    }";
+        let data = schema.execute(query).await.data.into_json().unwrap();
+
+        // The precise average (2.0833... + 4.9583...) / 2 is used for the assertion.
+        let expected_avg = 3.520_833_333_333_333;
+        assert_eq!(data["pullRequestStat"]["avgMergeDays"], expected_avg);
+    }
+
+    #[tokio::test]
+    async fn avg_merge_days_no_merged_prs() {
+        let schema = TestSchema::new();
+        let mut prs = create_pull_requests(2);
+
+        // Case with no merged PRs
+        prs[0].state = crate::outbound::PRPullRequestState::OPEN;
+        prs[1].state = crate::outbound::PRPullRequestState::CLOSED;
+
+        schema
+            .db
+            .insert_pull_requests(prs, "aicers", "github-dashboard-server")
+            .unwrap();
+
+        let query = "
+    {
+        pullRequestStat(filter: {}) {
+            avgMergeDays
+        }
+    }";
+        let data = schema.execute(query).await.data.into_json().unwrap();
+
+        // If there are no merged PRs, avgMergeDays should return null, not 0.0.
+        assert_eq!(
+            data["pullRequestStat"]["avgMergeDays"],
+            serde_json::Value::Null
+        );
     }
 }

@@ -37,7 +37,7 @@ pub(crate) struct Query(
 
 pub(crate) type Schema = async_graphql::Schema<Query, EmptyMutation, EmptySubscription>;
 
-#[derive(Debug, PartialEq, PartialOrd)]
+#[derive(Debug, PartialEq, PartialOrd, Clone, Copy)]
 pub(crate) struct DateTimeUtc(Timestamp);
 
 #[Scalar]
