@@ -65,6 +65,8 @@ pub(crate) struct ProjectV2ItemConnection {
 
 #[derive(SimpleObject, Debug)]
 pub(crate) struct ProjectV2Item {
+    pub(crate) project_id: String,
+    pub(crate) project_title: String,
     pub(crate) id: String,
     pub(crate) todo_status: Option<String>,
     pub(crate) todo_priority: Option<String>,
@@ -110,6 +112,35 @@ pub(crate) struct PullRequestRef {
     pub(crate) url: String,
 }
 
+pub(super) const TODO_LIST_PROJECT_TITLE: &str = "to-do list";
+pub(super) const TODO_LIST_STATUS_DONE: &str = "Done";
+
+impl Issue {
+    /// We define an issue is "Resolved" if and only if
+    /// - Status of the issue is "Closed" AND
+    /// - The issue has "to-do list" as a project item and its status is "Done"
+    pub(super) fn is_resolved(&self) -> bool {
+        if self.state != IssueState::CLOSED {
+            // If an issue is not "Closed", we can conclude that the issue is not resolved now
+            return false;
+        }
+
+        if (!self.project_items.nodes.is_empty())
+            && self.project_items.nodes.iter().any(|project_item| {
+                project_item.project_title == TODO_LIST_PROJECT_TITLE
+                    && project_item
+                        .todo_status
+                        .as_ref()
+                        .is_some_and(|status| status == TODO_LIST_STATUS_DONE)
+            })
+        {
+            return true;
+        }
+
+        false
+    }
+}
+
 impl TryFromKeyValue for Issue {
     fn try_from_key_value(key: &[u8], value: &[u8]) -> anyhow::Result<Self> {
         let (owner, repo, number) = database::parse_key(key)
@@ -150,6 +181,8 @@ impl TryFromKeyValue for Issue {
                     .nodes
                     .into_iter()
                     .map(|item| ProjectV2Item {
+                        project_id: item.project_id,
+                        project_title: item.project_title,
                         id: item.id,
                         todo_status: item.todo_status,
                         todo_priority: item.todo_priority,

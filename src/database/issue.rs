@@ -93,6 +93,8 @@ pub(crate) struct GitHubProjectV2ItemConnection {
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 pub(crate) struct GitHubProjectV2Item {
+    pub(crate) project_id: String,
+    pub(crate) project_title: String,
     pub(crate) id: String,
     pub(crate) todo_status: Option<String>,
     pub(crate) todo_priority: Option<String>,
@@ -267,6 +269,8 @@ impl TryFrom<IssuesRepositoryIssuesNodesProjectItems> for GitHubProjectV2ItemCon
 impl From<IssuesRepositoryIssuesNodesProjectItemsNodes> for GitHubProjectV2Item {
     fn from(node: IssuesRepositoryIssuesNodesProjectItemsNodes) -> Self {
         Self {
+            project_id: node.project.id,
+            project_title: node.project.title,
             id: node.id,
             todo_status: node.todo_status.and_then(|status| match status {
                 TodoStatus::ProjectV2ItemFieldSingleSelectValue(inner) => inner.name,
