@@ -38,6 +38,8 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   - `mergedPrCount`: The number of merged pull requests.
   - `avgReviewCommentCount`: The average number of reviews and comments per
     merged pull request.
+  - `avgMergeDays`: The average number of days from creation to merge for a pull
+    request.
 
 ### Changed
 
