@@ -137,7 +137,9 @@ impl PullRequestStatQuery {
 mod tests {
     use jiff::Timestamp;
 
-    use crate::{api::TestSchema, outbound::GitHubPullRequestNode};
+    use crate::api::TestSchema;
+    use crate::database::pull_request::{GitHubPullRequestNode, RepositoryNode};
+    use crate::outbound::pull_requests::PullRequestState;
 
     fn create_pull_requests_for_repo(
         n: usize,
@@ -147,7 +149,7 @@ mod tests {
         (0..n)
             .map(|i| GitHubPullRequestNode {
                 number: i.try_into().unwrap(),
-                repository: crate::outbound::RepositoryNode {
+                repository: RepositoryNode {
                     owner: owner.to_string(),
                     name: repo.to_string(),
                 },
@@ -170,9 +172,9 @@ mod tests {
         let mut prs = create_pull_requests(4);
         prs[0].author = "foo".to_string();
         prs[1].author = "foo".to_string();
-        prs[1].state = crate::outbound::PRPullRequestState::MERGED;
-        prs[2].state = crate::outbound::PRPullRequestState::MERGED;
-        prs[3].state = crate::outbound::PRPullRequestState::CLOSED;
+        prs[1].state = PullRequestState::MERGED;
+        prs[2].state = PullRequestState::MERGED;
+        prs[3].state = PullRequestState::CLOSED;
 
         schema
             .db
@@ -196,10 +198,10 @@ mod tests {
         let schema = TestSchema::new();
         let mut prs = create_pull_requests(4);
         prs[1].created_at = parse("2025-01-05T00:00:00Z");
-        prs[1].state = crate::outbound::PRPullRequestState::MERGED;
+        prs[1].state = PullRequestState::MERGED;
         prs[2].created_at = parse("2025-01-06T00:00:00Z");
         prs[3].created_at = parse("2025-01-06T00:00:00Z");
-        prs[3].state = crate::outbound::PRPullRequestState::MERGED;
+        prs[3].state = PullRequestState::MERGED;
 
         schema
             .db
@@ -238,7 +240,7 @@ mod tests {
         prs[2].created_at = parse("2025-01-06T00:00:00Z");
         prs[3].author = "foo".to_string();
         prs[3].created_at = parse("2025-01-05T00:00:00Z");
-        prs[3].state = crate::outbound::PRPullRequestState::MERGED;
+        prs[3].state = PullRequestState::MERGED;
 
         schema
             .db
@@ -263,9 +265,9 @@ mod tests {
         let mut server_prs = create_pull_requests_for_repo(2, "aicers", "github-dashboard-server");
         let mut client_prs = create_pull_requests_for_repo(3, "aicers", "github-dashboard-client");
 
-        server_prs[0].state = crate::outbound::PRPullRequestState::MERGED;
-        client_prs[1].state = crate::outbound::PRPullRequestState::MERGED;
-        client_prs[2].state = crate::outbound::PRPullRequestState::CLOSED;
+        server_prs[0].state = PullRequestState::MERGED;
+        client_prs[1].state = PullRequestState::MERGED;
+        client_prs[2].state = PullRequestState::CLOSED;
 
         schema
             .db
@@ -294,10 +296,10 @@ mod tests {
         let mut server_prs = create_pull_requests_for_repo(1, "aicers", "github-dashboard-server");
         let mut client_prs = create_pull_requests_for_repo(3, "aicers", "github-dashboard-client");
 
-        server_prs[0].state = crate::outbound::PRPullRequestState::MERGED;
+        server_prs[0].state = PullRequestState::MERGED;
         client_prs[1].author = "foo".to_string();
         client_prs[2].author = "foo".to_string();
-        client_prs[2].state = crate::outbound::PRPullRequestState::MERGED;
+        client_prs[2].state = PullRequestState::MERGED;
 
         schema
             .db
@@ -324,9 +326,9 @@ mod tests {
     async fn pr_count_with_different_states() {
         let schema = TestSchema::new();
         let mut prs = create_pull_requests(4);
-        prs[1].state = crate::outbound::PRPullRequestState::CLOSED;
-        prs[2].state = crate::outbound::PRPullRequestState::MERGED;
-        prs[3].state = crate::outbound::PRPullRequestState::MERGED;
+        prs[1].state = PullRequestState::CLOSED;
+        prs[2].state = PullRequestState::MERGED;
+        prs[3].state = PullRequestState::MERGED;
 
         schema
             .db
@@ -349,8 +351,8 @@ mod tests {
     async fn pr_count_no_matches() {
         let schema = TestSchema::new();
         let mut prs = create_pull_requests(2);
-        prs[0].state = crate::outbound::PRPullRequestState::MERGED;
-        prs[1].state = crate::outbound::PRPullRequestState::MERGED;
+        prs[0].state = PullRequestState::MERGED;
+        prs[1].state = PullRequestState::MERGED;
 
         schema
             .db
@@ -412,7 +414,7 @@ mod tests {
     async fn avg_review_comment_count_single_merged_pr() {
         let schema = TestSchema::new();
         let mut prs = create_pull_requests(1);
-        prs[0].state = crate::outbound::PRPullRequestState::MERGED;
+        prs[0].state = PullRequestState::MERGED;
         prs[0].comments.total_count = 3;
         prs[0].reviews.total_count = 2;
 
@@ -437,12 +439,12 @@ mod tests {
         let mut prs = create_pull_requests(3);
 
         // First merged PR: 4 comments + 1 review = 5 total
-        prs[0].state = crate::outbound::PRPullRequestState::MERGED;
+        prs[0].state = PullRequestState::MERGED;
         prs[0].comments.total_count = 4;
         prs[0].reviews.total_count = 1;
 
         // Second merged PR: 2 comments + 3 reviews = 5 total
-        prs[1].state = crate::outbound::PRPullRequestState::MERGED;
+        prs[1].state = PullRequestState::MERGED;
         prs[1].comments.total_count = 2;
         prs[1].reviews.total_count = 3;
 
@@ -472,11 +474,11 @@ mod tests {
         let mut prs = create_pull_requests(2);
 
         // Both PRs are merged but have no comments or reviews
-        prs[0].state = crate::outbound::PRPullRequestState::MERGED;
+        prs[0].state = PullRequestState::MERGED;
         prs[0].comments.total_count = 0;
         prs[0].reviews.total_count = 0;
 
-        prs[1].state = crate::outbound::PRPullRequestState::MERGED;
+        prs[1].state = PullRequestState::MERGED;
         prs[1].comments.total_count = 0;
         prs[1].reviews.total_count = 0;
 
@@ -502,17 +504,17 @@ mod tests {
         let mut prs = create_pull_requests(4);
 
         // MERGED PR: 6 comments + 2 reviews = 8 total
-        prs[0].state = crate::outbound::PRPullRequestState::MERGED;
+        prs[0].state = PullRequestState::MERGED;
         prs[0].comments.total_count = 6;
         prs[0].reviews.total_count = 2;
 
         // CLOSED PR: should not be included
-        prs[1].state = crate::outbound::PRPullRequestState::CLOSED;
+        prs[1].state = PullRequestState::CLOSED;
         prs[1].comments.total_count = 5;
         prs[1].reviews.total_count = 5;
 
         // MERGED PR: 1 comment + 1 review = 2 total
-        prs[2].state = crate::outbound::PRPullRequestState::MERGED;
+        prs[2].state = PullRequestState::MERGED;
         prs[2].comments.total_count = 1;
         prs[2].reviews.total_count = 1;
 
@@ -542,19 +544,19 @@ mod tests {
         let mut prs = create_pull_requests(3);
 
         // MERGED PR by author "alice": 3 comments + 3 reviews = 6 total
-        prs[0].state = crate::outbound::PRPullRequestState::MERGED;
+        prs[0].state = PullRequestState::MERGED;
         prs[0].author = "alice".to_string();
         prs[0].comments.total_count = 3;
         prs[0].reviews.total_count = 3;
 
         // MERGED PR by author "bob": 4 comments + 2 reviews = 6 total
-        prs[1].state = crate::outbound::PRPullRequestState::MERGED;
+        prs[1].state = PullRequestState::MERGED;
         prs[1].author = "bob".to_string();
         prs[1].comments.total_count = 4;
         prs[1].reviews.total_count = 2;
 
         // MERGED PR by author "alice": 2 comments + 4 reviews = 6 total
-        prs[2].state = crate::outbound::PRPullRequestState::MERGED;
+        prs[2].state = PullRequestState::MERGED;
         prs[2].author = "alice".to_string();
         prs[2].comments.total_count = 2;
         prs[2].reviews.total_count = 4;
@@ -593,15 +595,15 @@ mod tests {
         let mut prs = create_pull_requests(3);
 
         // Three merged PRs with different comment/review counts to test precision
-        prs[0].state = crate::outbound::PRPullRequestState::MERGED;
+        prs[0].state = PullRequestState::MERGED;
         prs[0].comments.total_count = 1;
         prs[0].reviews.total_count = 0; // Total: 1
 
-        prs[1].state = crate::outbound::PRPullRequestState::MERGED;
+        prs[1].state = PullRequestState::MERGED;
         prs[1].comments.total_count = 0;
         prs[1].reviews.total_count = 1; // Total: 1
 
-        prs[2].state = crate::outbound::PRPullRequestState::MERGED;
+        prs[2].state = PullRequestState::MERGED;
         prs[2].comments.total_count = 1;
         prs[2].reviews.total_count = 1; // Total: 2
 
@@ -632,7 +634,7 @@ mod tests {
         prs[0].reviews.total_count = 1;
 
         // MERGED PR: 2 comments + 1 review = 3 total
-        prs[1].state = crate::outbound::PRPullRequestState::MERGED;
+        prs[1].state = PullRequestState::MERGED;
         prs[1].comments.total_count = 2;
         prs[1].reviews.total_count = 1;
 
@@ -641,7 +643,7 @@ mod tests {
         prs[2].reviews.total_count = 5;
 
         // MERGED PR: 4 comments + 3 reviews = 7 total
-        prs[3].state = crate::outbound::PRPullRequestState::MERGED;
+        prs[3].state = PullRequestState::MERGED;
         prs[3].comments.total_count = 4;
         prs[3].reviews.total_count = 3;
 
@@ -669,17 +671,17 @@ mod tests {
         let mut prs = create_pull_requests(3);
 
         // MERGED PR 1: 2 days and 2 hours = 2.0833... days
-        prs[0].state = crate::outbound::PRPullRequestState::MERGED;
+        prs[0].state = PullRequestState::MERGED;
         prs[0].created_at = parse("2025-08-01T10:00:00Z");
         prs[0].merged_at = Some(parse("2025-08-03T12:00:00Z"));
 
         // MERGED PR 2: 4 days and 23 hours = 4.9583... days
-        prs[1].state = crate::outbound::PRPullRequestState::MERGED;
+        prs[1].state = PullRequestState::MERGED;
         prs[1].created_at = parse("2025-08-10T00:00:00Z");
         prs[1].merged_at = Some(parse("2025-08-14T23:00:00Z"));
 
         // OPEN PR (Not included in calculation)
-        prs[2].state = crate::outbound::PRPullRequestState::OPEN;
+        prs[2].state = PullRequestState::OPEN;
         prs[2].created_at = parse("2025-08-20T00:00:00Z");
 
         schema
@@ -706,8 +708,8 @@ mod tests {
         let mut prs = create_pull_requests(2);
 
         // Case with no merged PRs
-        prs[0].state = crate::outbound::PRPullRequestState::OPEN;
-        prs[1].state = crate::outbound::PRPullRequestState::CLOSED;
+        prs[0].state = PullRequestState::OPEN;
+        prs[1].state = PullRequestState::CLOSED;
 
         schema
             .db

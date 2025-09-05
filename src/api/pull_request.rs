@@ -9,12 +9,14 @@ use jiff::Timestamp;
 
 use crate::{
     api::{self, DateTimeUtc},
-    database::{Database, TryFromKeyValue},
-    outbound::{
-        GitHubCommitConnection, GitHubPRCommentConnection, GitHubPullRequestNode,
-        GitHubReviewConnection, PRPullRequestState as PullRequestState, PullRequestReviewState,
-        RepositoryNode,
+    database::{
+        pull_request::{
+            GitHubCommitConnection, GitHubPRCommentConnection, GitHubPullRequestNode,
+            GitHubReviewConnection, RepositoryNode,
+        },
+        Database, TryFromKeyValue,
     },
+    outbound::pull_requests::{PullRequestReviewState, PullRequestState},
 };
 scalar!(PullRequestState);
 scalar!(PullRequestReviewState);
@@ -246,10 +248,11 @@ impl PullRequestQuery {
 #[cfg(test)]
 mod tests {
     use crate::api::TestSchema;
-    use crate::outbound::{
+    use crate::database::pull_request::{
         GitHubCommitConnection, GitHubPRCommentConnection, GitHubPullRequestNode,
-        GitHubReviewConnection, PRPullRequestState, RepositoryNode,
+        GitHubReviewConnection, RepositoryNode,
     };
+    use crate::outbound::pull_requests::PullRequestState;
 
     #[tokio::test]
     async fn pull_requests_empty() {
@@ -279,7 +282,7 @@ mod tests {
                 number: 1,
                 title: "pull request 1".to_string(),
                 body: Some(String::new()),
-                state: PRPullRequestState::OPEN,
+                state: PullRequestState::OPEN,
                 created_at: "2024-01-01T00:00:00Z".parse().unwrap(),
                 updated_at: "2024-01-01T00:00:00Z".parse().unwrap(),
                 closed_at: None,
@@ -314,7 +317,7 @@ mod tests {
                 number: 2,
                 title: "pull request 2".to_string(),
                 body: Some(String::new()),
-                state: PRPullRequestState::OPEN,
+                state: PullRequestState::OPEN,
                 created_at: "2024-01-01T00:00:00Z".parse().unwrap(),
                 updated_at: "2024-01-01T00:00:00Z".parse().unwrap(),
                 closed_at: None,
@@ -396,7 +399,7 @@ mod tests {
                 number: 1,
                 title: "pull request 1".to_string(),
                 body: Some(String::new()),
-                state: PRPullRequestState::OPEN,
+                state: PullRequestState::OPEN,
                 created_at: "2024-01-01T00:00:00Z".parse().unwrap(),
                 updated_at: "2024-01-01T00:00:00Z".parse().unwrap(),
                 closed_at: None,
@@ -431,7 +434,7 @@ mod tests {
                 number: 2,
                 title: "pull request 2".to_string(),
                 body: Some(String::new()),
-                state: PRPullRequestState::OPEN,
+                state: PullRequestState::OPEN,
                 created_at: "2024-01-01T00:00:00Z".parse().unwrap(),
                 updated_at: "2024-01-01T00:00:00Z".parse().unwrap(),
                 closed_at: None,

@@ -7,11 +7,10 @@ use serde::Serialize;
 
 pub mod discussion;
 pub mod issue;
+pub mod pull_request;
 
 pub(crate) use discussion::DiscussionDbSchema;
 pub(crate) use issue::GitHubIssue;
-
-use crate::{api::pull_request::PullRequest, outbound::GitHubPullRequestNode};
 
 const GLOBAL_PARTITION_NAME: &str = "global";
 const ISSUE_PARTITION_NAME: &str = "issues";
@@ -83,32 +82,6 @@ impl Database {
             return Ok(result);
         }
         bail!("Failed to get db value");
-    }
-
-    pub(crate) fn insert_pull_requests(
-        &self,
-        resp: Vec<GitHubPullRequestNode>,
-        owner: &str,
-        name: &str,
-    ) -> Result<()> {
-        for item in resp {
-            let keystr: String = format!("{owner}/{name}#{}", item.number);
-            Database::insert(&keystr, item, &self.pull_request_partition)?;
-        }
-        Ok(())
-    }
-
-    pub(crate) fn pull_requests(
-        &self,
-        start: Option<&[u8]>,
-        end: Option<&[u8]>,
-    ) -> Iter<PullRequest> {
-        let start = start.unwrap_or(b"\x00");
-        if let Some(end) = end {
-            Iter::new(self.pull_request_partition.range(start..end))
-        } else {
-            Iter::new(self.pull_request_partition.range(start..))
-        }
     }
 }
 
