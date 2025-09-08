@@ -4,18 +4,24 @@ use anyhow::{bail, Context, Error, Result};
 use graphql_client::{GraphQLQuery, QueryBody, Response as GraphQlResponse};
 use jiff::Timestamp;
 use reqwest::{Client, RequestBuilder, Response};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use tokio::time;
 use tracing::error;
 
-pub use self::pull_requests::{PullRequestReviewState, PullRequestState as PRPullRequestState};
 use crate::database::DiscussionDbSchema;
 use crate::{
-    database::{issue::GitHubIssue, Database},
+    database::{
+        issue::GitHubIssue,
+        pull_request::{
+            CommitInner, GitHubCommitConnection, GitHubPRComment, GitHubPRCommentConnection,
+            GitHubPullRequestNode, GitHubReviewConnection, RepositoryNode, ReviewNode,
+        },
+        Database,
+    },
     outbound::{
         issues::IssueState,
         pull_requests::{
-            PullRequestReviewDecision,
+            PullRequestReviewDecision, PullRequestReviewState,
             PullRequestsRepositoryPullRequestsNodesAuthor::User as PullRequestAuthorUser,
             PullRequestsRepositoryPullRequestsNodesCommentsNodesAuthor as PRCommentAuthor,
             PullRequestsRepositoryPullRequestsNodesReviewRequestsNodesRequestedReviewer::User as PRReviewRequestedUser,
@@ -63,89 +69,6 @@ impl Default for IssueState {
     fn default() -> Self {
         IssueState::OPEN
     }
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-pub(crate) struct GitHubPRComment {
-    pub(crate) author: String,
-    pub(crate) body: String,
-    pub(crate) created_at: Timestamp,
-    pub(crate) updated_at: Timestamp,
-    pub(crate) repository_name: String,
-    pub(crate) url: String,
-}
-
-#[derive(Debug, Default, Deserialize, Serialize)]
-pub(crate) struct GitHubPRCommentConnection {
-    pub(crate) total_count: i32,
-    pub(crate) nodes: Vec<GitHubPRComment>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub(super) struct CommitInner {
-    pub(super) additions: i32,
-    pub(super) deletions: i32,
-    pub(super) message: String,
-    pub(super) message_body: Option<String>,
-    pub(super) author: String,
-    pub(super) changed_files_if_available: Option<i32>,
-    pub(super) committed_date: DateTime,
-    pub(super) committer: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub(super) struct RepositoryNode {
-    pub(super) owner: String,
-    pub(super) name: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub(super) struct ReviewNode {
-    pub(super) author: String,
-    pub(super) state: PullRequestReviewState,
-    pub(super) body: Option<String>,
-    pub(super) url: String,
-    pub(super) created_at: DateTime,
-    pub(super) published_at: Option<DateTime>,
-    pub(super) submitted_at: DateTime,
-    pub(super) is_minimized: bool,
-    pub(super) comments: GitHubPRCommentConnection,
-}
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub(super) struct GitHubCommitConnection {
-    pub(super) total_count: i32,
-    pub(super) nodes: Vec<CommitInner>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub(super) struct GitHubReviewConnection {
-    pub(super) total_count: i32,
-    pub(super) nodes: Vec<ReviewNode>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub(super) struct GitHubPullRequestNode {
-    pub(super) id: String,
-    pub(super) number: i32,
-    pub(super) title: String,
-    pub(super) body: Option<String>,
-    pub(super) state: PRPullRequestState,
-    pub(super) created_at: DateTime,
-    pub(super) updated_at: DateTime,
-    pub(super) closed_at: Option<DateTime>,
-    pub(super) merged_at: Option<DateTime>,
-    pub(super) author: String,
-    pub(super) additions: i32,
-    pub(super) deletions: i32,
-    pub(super) url: String,
-    pub(super) repository: RepositoryNode,
-    pub(super) labels: Vec<String>,
-    pub(super) comments: GitHubPRCommentConnection,
-    pub(super) review_decision: Option<PullRequestReviewState>,
-    pub(super) assignees: Vec<String>,
-    pub(super) review_requests: Vec<String>,
-    pub(super) reviews: GitHubReviewConnection,
-    pub(super) commits: GitHubCommitConnection,
 }
 
 pub(super) async fn fetch_periodically(
