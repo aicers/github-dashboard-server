@@ -8,8 +8,7 @@ use async_graphql::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    api,
-    api::DateTimeUtc,
+    api::{self, DateTimeUtc, TODO_LIST_PROJECT_TITLE, TODO_LIST_STATUS_DONE},
     database::{self, Database, GitHubIssue, TryFromKeyValue},
     outbound::issues::{IssueState, PullRequestState},
 };
@@ -111,9 +110,6 @@ pub(crate) struct PullRequestRef {
     pub(crate) closed_at: Option<DateTimeUtc>,
     pub(crate) url: String,
 }
-
-pub(super) const TODO_LIST_PROJECT_TITLE: &str = "to-do list";
-pub(super) const TODO_LIST_STATUS_DONE: &str = "Done";
 
 impl Issue {
     /// We define an issue is "Resolved" if and only if
