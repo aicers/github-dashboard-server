@@ -10,23 +10,8 @@ use tracing::error;
 
 use crate::database::DiscussionDbSchema;
 use crate::{
-    database::{
-        issue::GitHubIssue,
-        pull_request::{
-            CommitInner, GitHubCommitConnection, GitHubPRComment, GitHubPRCommentConnection,
-            GitHubPullRequestNode, GitHubReviewConnection, RepositoryNode, ReviewNode,
-        },
-        Database,
-    },
-    outbound::{
-        issues::IssueState,
-        pull_requests::{
-            PullRequestReviewDecision, PullRequestReviewState,
-            PullRequestsRepositoryPullRequestsNodesAuthor::User as PullRequestAuthorUser,
-            PullRequestsRepositoryPullRequestsNodesCommentsNodesAuthor as PRCommentAuthor,
-            PullRequestsRepositoryPullRequestsNodesReviewRequestsNodesRequestedReviewer::User as PRReviewRequestedUser,
-        },
-    },
+    database::{issue::GitHubIssue, pull_request::GitHubPullRequestNode, Database},
+    outbound::issues::IssueState,
     settings::Repository as RepoInfo,
 };
 
@@ -182,7 +167,7 @@ async fn send_github_issue_query(
 
     Ok(total_issue)
 }
-#[allow(clippy::too_many_lines)]
+
 async fn send_github_pr_query(
     owner: &str,
     name: &str,
@@ -202,181 +187,36 @@ async fn send_github_pr_query(
 
         let resp_body: GraphQlResponse<pull_requests::ResponseData> =
             send_query::<PullRequests>(token, var).await?.json().await?;
+
+        // TODO: Use `let` chain instead of nested `if let Some` after migrating to Rust 2024
         if let Some(data) = resp_body.data {
-            if let Some(repository) = data.repository {
-                if let Some(nodes) = repository.pull_requests.nodes {
-                    for pr in nodes.into_iter().flatten() {
-                        let mut assignees_list = Vec::new();
-                        if let Some(ass_nodes) = pr.assignees.nodes {
-                            for node in ass_nodes.into_iter().flatten() {
-                                assignees_list.push(node.login);
-                            }
-                        }
-                        let mut rr_nodes = Vec::new();
-                        if let Some(req_conn) = pr.review_requests {
-                            if let Some(req_nodes) = req_conn.nodes {
-                                for rr in req_nodes.into_iter().flatten() {
-                                    if let Some(PRReviewRequestedUser(user_node)) =
-                                        rr.requested_reviewer
-                                    {
-                                        rr_nodes.push(user_node.login);
-                                    }
+            if let Some(repo) = data.repository {
+                if let Some(nodes) = repo.pull_requests.nodes {
+                    {
+                        let mut dropped = 0usize;
+                        prs.extend(nodes.into_iter().flatten().filter_map(|n| {
+                            match GitHubPullRequestNode::try_from(n) {
+                                Ok(pr) => Some(pr),
+                                Err(e) => {
+                                    tracing::warn!("Dropping PR node due to conversion error: {e}");
+                                    dropped += 1;
+                                    None
                                 }
                             }
+                        }));
+                        if dropped > 0 {
+                            tracing::debug!("Dropped {dropped} PR nodes from this page");
                         }
-                        prs.push(GitHubPullRequestNode {
-                            id: pr.id,
-                            number: pr.number.try_into().unwrap_or_default(),
-                            title: pr.title,
-                            body: Some(pr.body),
-                            state: pr.state,
-                            created_at: pr.created_at,
-                            updated_at: pr.updated_at,
-                            closed_at: pr.closed_at,
-                            merged_at: pr.merged_at,
-                            author: match pr.author {
-                            Some(PullRequestAuthorUser(user)) => user.login,
-                            _ => String::new(),
-                        },
-                            additions: pr.additions.try_into().unwrap_or_default(),
-                            deletions: pr.deletions.try_into().unwrap_or_default(),
-                            url: pr.url,
-                            repository: RepositoryNode {
-                                owner: pr.repository.owner.login,
-                                name: pr.repository.name.clone(),
-                            },
-                            labels: pr
-                                .labels
-                                .as_ref()
-                                .and_then(|conn| conn.nodes.as_ref())
-                                .map(|nodes| {
-                                    nodes
-                                        .iter()
-                                        .filter_map(|n| n.as_ref().map(|node| node.name.clone()))
-                                        .collect::<Vec<String>>()
-                                })
-                                .unwrap_or_default(),
-                            comments: GitHubPRCommentConnection {
-                                total_count: pr.comments.total_count.try_into().unwrap_or_default(),
-                                nodes: pr
-                                    .comments
-                                    .nodes
-                                    .as_ref()
-                                    .into_iter()
-                                    .flatten()
-                                    .filter_map(|n| n.as_ref())
-                                    .map(|node| GitHubPRComment {
-                                        author: match &node.author {
-                                            Some(PRCommentAuthor::User(u)) => u.login.clone(),
-                                            _ => String::new(),
-                                        },
-                                        body: node.body.clone(),
-                                        created_at: node.created_at,
-                                        updated_at: node.updated_at,
-                                        repository_name: pr.repository.name.clone(),
-                                        url: String::new(),
-                                    })
-                                    .collect(),
-                            },
 
-                            review_decision: pr.review_decision.and_then(|d| match d {
-                                PullRequestReviewDecision::APPROVED => Some(PullRequestReviewState::APPROVED),
-                                PullRequestReviewDecision::CHANGES_REQUESTED => Some(PullRequestReviewState::CHANGES_REQUESTED),
-                                PullRequestReviewDecision::REVIEW_REQUIRED => Some(PullRequestReviewState::PENDING),
-                                PullRequestReviewDecision::Other(_) => None,
-                            }),
-                            assignees: assignees_list,
-                            review_requests: rr_nodes,
-                            reviews: GitHubReviewConnection {
-                                total_count: pr
-                                    .reviews
-                                    .as_ref()
-                                    .map(|r| r.total_count.try_into().unwrap_or_default())
-                                    .unwrap_or_default(),
-                                nodes: pr
-                                    .reviews
-                                    .as_ref()
-                                    .and_then(|r| r.nodes.as_ref())
-                                    .map(|nodes| {
-                                        nodes
-                                            .iter()
-                                            .filter_map(|n| n.as_ref())
-                                            .map(|node| ReviewNode {
-                                                author: node.author.as_ref().and_then(|a| match a {
-                                                    pull_requests::PullRequestsRepositoryPullRequestsNodesReviewsNodesAuthor::User(u) => Some(u.login.clone()),
-                                                    _ => None,
-                                                }).unwrap_or_default(),
-                                                state: node.state.clone(),
-                                                body: Some(node.body.clone()),
-                                                url: node.url.clone(),
-                                                created_at: node.created_at,
-                                                published_at: node.published_at,
-                                                submitted_at: node.submitted_at.unwrap_or_else(Timestamp::now),
-                                                is_minimized: node.is_minimized,
-                                                comments: GitHubPRCommentConnection {
-                                                    total_count: node.comments.total_count.try_into().unwrap_or_default(),
-                                                    nodes: vec![],
-                                                },
-                                            })
-                                            .collect()
-                                    })
-                                    .unwrap_or_default(),
-                            },
-                            commits: GitHubCommitConnection {
-                                total_count: pr
-                                    .commits
-                                    .total_count
-                                    .try_into()
-                                    .unwrap_or_default(),
-                                nodes: pr
-                                    .commits
-                                    .nodes
-                                    .as_ref()
-                                    .map_or(vec![], |nodes| {
-                                        nodes
-                                            .iter()
-                                            .filter_map(|n| n.as_ref())
-                                            .map(|node| {
-                                                let commit = &node.commit;
-                                                CommitInner {
-                                                    additions: commit.additions.try_into().unwrap_or_default(),
-                                                    deletions: commit.deletions.try_into().unwrap_or_default(),
-                                                    message: commit.message.clone(),
-                                                    message_body: Some(commit.message_body.clone()),
-                                                    author: commit
-                                                        .author
-                                                        .as_ref()
-                                                        .and_then(|a| a.user.as_ref()).map(|u| u.login.clone())
-                                                        .unwrap_or_default(),
-                                                    changed_files_if_available: commit
-                                                        .changed_files_if_available
-                                                        .and_then(|v| v.try_into().ok()),
-                                                    committed_date: commit.committed_date,
-                                                    committer: commit
-                                                        .committer
-                                                        .as_ref()
-                                                        .and_then(|c| c.user.as_ref())
-                                                        .map(|user| user.login.clone())
-                                                        .unwrap_or_default(),
+                        if !repo.pull_requests.page_info.has_next_page {
+                            break;
+                        }
 
-                                                }
-                                            })
-                                            .collect()
-                                    }),
-                            }
-                        });
+                        end_cur = repo.pull_requests.page_info.end_cursor;
                     }
-                    if !repository.pull_requests.page_info.has_next_page {
-                        break;
-                    }
-                    end_cur = repository.pull_requests.page_info.end_cursor;
-                    continue;
                 }
-                end_cur = repository.pull_requests.page_info.end_cursor;
-                continue;
             }
         }
-        bail!("Failed to parse response data");
     }
     Ok(prs)
 }
