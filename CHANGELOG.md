@@ -40,6 +40,8 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
     merged pull request.
   - `avgMergeDays`: The average number of days from creation to merge for a pull
     request.
+  - Added `avgResolutionDays` field to the `issueStat` GraphQL query. This field
+  calculates the average resolution time in days for issues marked as 'resolved'.
 
 ### Changed
 

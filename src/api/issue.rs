@@ -112,8 +112,8 @@ pub(crate) struct PullRequestRef {
     pub(crate) url: String,
 }
 
-pub(super) const TODO_LIST_PROJECT_TITLE: &str = "to-do list";
-pub(super) const TODO_LIST_STATUS_DONE: &str = "Done";
+pub(crate) const TODO_LIST_PROJECT_TITLE: &str = "to-do list";
+pub(crate) const TODO_LIST_STATUS_DONE: &str = "Done";
 
 impl Issue {
     /// We define an issue is "Resolved" if and only if
