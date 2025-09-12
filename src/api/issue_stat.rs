@@ -1,7 +1,12 @@
 use async_graphql::{Context, InputObject, Object, Result, SimpleObject};
+use jiff::{SpanTotal, Unit};
+use num_traits::cast;
 
 use crate::{
-    api::{issue::Issue, DateTimeUtc},
+    api::{
+        issue::{Issue, TODO_LIST_PROJECT_TITLE},
+        DateTimeUtc,
+    },
     database::Iter,
     outbound::issues::IssueState,
     Database,
@@ -57,6 +62,9 @@ struct IssueStat {
 
     /// The number of resolved issues.
     resolved_issue_count: i32,
+
+    /// The average resolution time in days for resolved issues.
+    avg_resolution_days: Option<f64>,
 }
 
 #[Object]
@@ -81,9 +89,46 @@ impl IssueStatQuery {
             .try_into()
             .expect("The number of resolved issues will not exceed i32::MAX");
 
+        let resolution_days: Vec<f64> = resolved_issues
+            .iter()
+            .filter_map(|issue| {
+                let closed_at = issue.closed_at?;
+                let created_at = issue.created_at;
+
+                let project_item = issue
+                    .project_items
+                    .nodes
+                    .iter()
+                    .find(|p| p.project_title == TODO_LIST_PROJECT_TITLE)?;
+
+                let pending_days = project_item.todo_pending_days.unwrap_or(0.0);
+
+                let span = created_at.0.until(closed_at.0).ok()?;
+                let resolution_days = span
+                    .total(SpanTotal::from(Unit::Day).days_are_24_hours())
+                    .ok()?;
+                let result_days = resolution_days - pending_days;
+
+                Some(f64::max(result_days, 0.0))
+            })
+            .collect();
+
+        let avg_resolution_days = if resolution_days.is_empty() {
+            None
+        } else {
+            let count: f64 = cast(resolution_days.len()).unwrap_or(0.0);
+
+            if count == 0.0 {
+                None
+            } else {
+                Some(resolution_days.iter().sum::<f64>() / count)
+            }
+        };
+
         Ok(IssueStat {
             open_issue_count,
             resolved_issue_count,
+            avg_resolution_days,
         })
     }
 }
@@ -496,5 +541,69 @@ mod tests {
         }"#;
         let data = schema.execute(query).await.data.into_json().unwrap();
         assert_eq!(data["issueStat"]["resolvedIssueCount"], 1);
+    }
+
+    #[tokio::test]
+    async fn avg_resolution_days() {
+        let schema = TestSchema::new();
+        let owner = "aicers";
+        let repo = "github-dashboard-server";
+        let mut resolved_issues = create_resolved_issues(1..=2);
+
+        // Issue 1: 10 days resolution, 2 pending days. Net: 8 days.
+        resolved_issues[0].created_at = parse("2025-01-01T00:00:00Z");
+        resolved_issues[0].closed_at = Some(parse("2025-01-11T00:00:00Z"));
+        resolved_issues[0].project_items.nodes[0].todo_pending_days = Some(2.0);
+
+        // Issue 2: 5 days resolution, 1 pending day. Net: 4 days.
+        resolved_issues[1].created_at = parse("2025-01-01T00:00:00Z");
+        resolved_issues[1].closed_at = Some(parse("2025-01-06T00:00:00Z"));
+        resolved_issues[1].project_items.nodes[0].todo_pending_days = Some(1.0);
+
+        schema
+            .db
+            .insert_issues(resolved_issues, owner, repo)
+            .unwrap();
+
+        let query = r"
+        {
+            issueStat(filter: {}) {
+                avgResolutionDays
+            }
+        }";
+        let data = schema.execute(query).await.data.into_json().unwrap();
+        // Average of 8 and 4 is 6.
+        assert_eq!(data["issueStat"]["avgResolutionDays"], 6.0);
+    }
+
+    #[tokio::test]
+    async fn avg_resolution_days_is_not_negative() {
+        let schema = TestSchema::new();
+        let owner = "aicers";
+        let repo = "github-dashboard-server";
+        let mut resolved_issues = create_resolved_issues(1..=1);
+
+        // Create an issue where the pending days (10 days) exceed the resolution days (5 days).
+        // In this case, the net resolution days should be 0, not negative.
+        // resolution_days (5.0) - pending_days (10.0) = -5.0
+        resolved_issues[0].created_at = parse("2025-01-01T00:00:00Z");
+        resolved_issues[0].closed_at = Some(parse("2025-01-06T00:00:00Z"));
+        resolved_issues[0].project_items.nodes[0].todo_pending_days = Some(10.0);
+
+        schema
+            .db
+            .insert_issues(resolved_issues, owner, repo)
+            .unwrap();
+
+        let query = r"
+        {
+            issueStat(filter: {}) {
+                avgResolutionDays
+            }
+        }";
+        let data = schema.execute(query).await.data.into_json().unwrap();
+
+        // The average resolution days should be 0.0, not negative.
+        assert_eq!(data["issueStat"]["avgResolutionDays"], 0.0);
     }
 }
