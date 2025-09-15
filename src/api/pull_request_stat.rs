@@ -46,7 +46,7 @@ impl PullRequestStatFilter {
 #[derive(Default)]
 pub(super) struct PullRequestStatQuery {}
 
-#[derive(SimpleObject)]
+#[derive(SimpleObject, Default)]
 struct PullRequestStat {
     /// The number of open pull requests.
     open_pr_count: i32,
@@ -58,6 +58,20 @@ struct PullRequestStat {
     avg_review_comment_count: Option<f64>,
     /// The average number of days taken to merge pull requests.
     avg_merge_days: Option<f64>,
+    /// Code change statistics for merged pull requests.
+    code_change: Option<CodeChange>,
+}
+
+#[derive(SimpleObject, Debug, Default, Clone)]
+pub(crate) struct CodeChange {
+    /// Total number of lines added.
+    pub(crate) additions: i32,
+    /// Total number of lines deleted.
+    pub(crate) deletions: i32,
+    /// Net change (additions - deletions).
+    pub(crate) delta: i32,
+    /// Total lines changed (additions + deletions).
+    pub(crate) total: i32,
 }
 
 #[Object]
@@ -124,11 +138,25 @@ impl PullRequestStatQuery {
             Some(total_days / count)
         };
 
+        let code_change = if merged_prs.is_empty() {
+            None
+        } else {
+            let additions = merged_prs.iter().map(|pr| pr.additions).sum();
+            let deletions = merged_prs.iter().map(|pr| pr.deletions).sum();
+            Some(CodeChange {
+                additions,
+                deletions,
+                delta: additions - deletions,
+                total: additions + deletions,
+            })
+        };
+
         Ok(PullRequestStat {
             open_pr_count,
             merged_pr_count,
             avg_review_comment_count,
             avg_merge_days,
+            code_change,
         })
     }
 }
@@ -345,6 +373,65 @@ mod tests {
         let data = schema.execute(query).await.data.into_json().unwrap();
         assert_eq!(data["pullRequestStat"]["openPrCount"], 1);
         assert_eq!(data["pullRequestStat"]["mergedPrCount"], 2);
+    }
+
+    #[tokio::test]
+    async fn code_change_calculation() {
+        let schema = TestSchema::new();
+        let mut prs = create_pull_requests(5);
+
+        // PR 1: MERGED
+        prs[0].state = PullRequestState::MERGED;
+        prs[0].additions = 100;
+        prs[0].deletions = 10;
+
+        // PR 2: MERGED
+        prs[1].state = PullRequestState::MERGED;
+        prs[1].additions = 50;
+        prs[1].deletions = 20;
+
+        // PR 3: OPEN
+        prs[2].state = PullRequestState::OPEN;
+        prs[2].additions = 1000; // Should not be included
+        prs[2].deletions = 1000;
+
+        // PR 4: CLOSED
+        prs[3].state = PullRequestState::CLOSED;
+        prs[3].additions = 1000; // Should not be included
+        prs[3].deletions = 1000;
+
+        // PR 5: MERGED
+        prs[4].state = PullRequestState::MERGED;
+        prs[4].additions = 20;
+        prs[4].deletions = 5;
+
+        schema
+            .db
+            .insert_pull_requests(prs, "aicers", "github-dashboard-server")
+            .unwrap();
+
+        let query = r#"
+        {
+            pullRequestStat(filter: {}) {
+                codeChange {
+                    additions
+                    deletions
+                    delta
+                    total
+                }
+            }
+        }"#;
+        let data = schema.execute(query).await.data.into_json().unwrap();
+        let code_change = &data["pullRequestStat"]["codeChange"];
+
+        // Total additions: 100 + 50 + 20 = 170
+        // Total deletions: 10 + 20 + 5 = 35
+        // Delta: 170 - 35 = 135
+        // Total: 170 + 35 = 205
+        assert_eq!(code_change["additions"], 170);
+        assert_eq!(code_change["deletions"], 35);
+        assert_eq!(code_change["delta"], 135);
+        assert_eq!(code_change["total"], 205);
     }
 
     #[tokio::test]
