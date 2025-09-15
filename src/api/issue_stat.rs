@@ -1,4 +1,6 @@
-use async_graphql::{Context, InputObject, Object, Result, SimpleObject};
+use std::collections::BTreeMap;
+
+use async_graphql::{Context, Enum, InputObject, Object, Result, SimpleObject};
 
 use crate::{
     api::{issue::Issue, DateTimeUtc},
@@ -6,6 +8,35 @@ use crate::{
     outbound::issues::IssueState,
     Database,
 };
+
+#[derive(Enum, Copy, Clone, Eq, PartialEq, Debug, PartialOrd, Ord)]
+pub enum IssueSize {
+    None,
+    XS,
+    S,
+    M,
+    L,
+    XL,
+}
+
+impl From<&str> for IssueSize {
+    fn from(value: &str) -> Self {
+        match value {
+            "XS" => Self::XS,
+            "S" => Self::S,
+            "M" => Self::M,
+            "L" => Self::L,
+            "XL" => Self::XL,
+            _ => Self::None,
+        }
+    }
+}
+
+#[derive(SimpleObject)]
+struct IssueSizeCount {
+    size: IssueSize,
+    count: usize,
+}
 
 #[derive(InputObject, Debug)]
 pub(crate) struct IssueStatFilter {
@@ -57,6 +88,9 @@ struct IssueStat {
 
     /// The number of resolved issues.
     resolved_issue_count: i32,
+
+    /// The distribution of resolved issues by size.
+    resolved_issue_size_distribution: Vec<IssueSizeCount>,
 }
 
 #[Object]
@@ -81,9 +115,27 @@ impl IssueStatQuery {
             .try_into()
             .expect("The number of resolved issues will not exceed i32::MAX");
 
+        let resolved_issue_size_distribution = resolved_issues
+            .iter()
+            .fold(BTreeMap::new(), |mut acc, issue| {
+                let size_str = issue
+                    .project_items
+                    .nodes
+                    .iter()
+                    .find(|item| item.project_title == super::issue::TODO_LIST_PROJECT_TITLE)
+                    .and_then(|item| item.todo_size.as_deref())
+                    .unwrap_or("None");
+                *acc.entry(size_str.into()).or_insert(0) += 1;
+                acc
+            })
+            .into_iter()
+            .map(|(size, count)| IssueSizeCount { size, count })
+            .collect();
+
         Ok(IssueStat {
             open_issue_count,
             resolved_issue_count,
+            resolved_issue_size_distribution,
         })
     }
 }
@@ -496,5 +548,80 @@ mod tests {
         }"#;
         let data = schema.execute(query).await.data.into_json().unwrap();
         assert_eq!(data["issueStat"]["resolvedIssueCount"], 1);
+    }
+
+    #[tokio::test]
+    async fn resolved_issue_size_distribution() {
+        let schema = TestSchema::new();
+        let owner: &str = "aicers";
+        let repo = "github-dashboard-server";
+
+        let mut resolved_issues = create_resolved_issues(1..=6);
+        // 1 XS
+        resolved_issues[0]
+            .project_items
+            .nodes
+            .get_mut(0)
+            .unwrap()
+            .todo_size = Some("XS".to_string());
+        // 2 S
+        resolved_issues[1]
+            .project_items
+            .nodes
+            .get_mut(0)
+            .unwrap()
+            .todo_size = Some("S".to_string());
+        resolved_issues[2]
+            .project_items
+            .nodes
+            .get_mut(0)
+            .unwrap()
+            .todo_size = Some("S".to_string());
+        // 1 M
+        resolved_issues[3]
+            .project_items
+            .nodes
+            .get_mut(0)
+            .unwrap()
+            .todo_size = Some("M".to_string());
+        // invalid size -> None
+        resolved_issues[4]
+            .project_items
+            .nodes
+            .get_mut(0)
+            .unwrap()
+            .todo_size = Some("invalid".to_string());
+        // no size -> None
+        resolved_issues[5]
+            .project_items
+            .nodes
+            .get_mut(0)
+            .unwrap()
+            .todo_size = None;
+
+        schema
+            .db
+            .insert_issues(resolved_issues, owner, repo)
+            .unwrap();
+
+        let query = r"
+        {
+            issueStat(filter: {}) {
+                resolvedIssueSizeDistribution {
+                    size
+                    count
+                }
+            }
+        }";
+        let data = schema.execute(query).await.data.into_json().unwrap();
+        assert_eq!(
+            data["issueStat"]["resolvedIssueSizeDistribution"],
+            serde_json::json!([
+                { "size": "NONE", "count": 2 },
+                { "size": "XS", "count": 1 },
+                { "size": "S", "count": 2 },
+                { "size": "M", "count": 1 }
+            ])
+        );
     }
 }
