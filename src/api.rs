@@ -18,8 +18,12 @@ use jiff::Timestamp;
 pub(crate) use self::discussion::Discussion;
 use crate::database::Database;
 
-/// The default page size for connections when neither `first` nor `last` is
-/// provided.
+// The title of the github project.
+pub(crate) const TODO_LIST_PROJECT_TITLE: &str = "to-do list";
+// The status name of the "Done" column in the github project.
+pub(crate) const TODO_LIST_STATUS_DONE: &str = "Done";
+
+/// The default page size for connections when neither `first` nor `last` is provided.
 const DEFAULT_PAGE_SIZE: usize = 100;
 
 /// A set of queries defined in the schema.
