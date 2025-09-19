@@ -34,10 +34,33 @@ impl From<&str> for IssueSize {
         }
     }
 }
+#[derive(Enum, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Debug)]
+enum IssuePriority {
+    P0,
+    P1,
+    P2,
+    None,
+}
+
+impl From<&str> for IssuePriority {
+    fn from(s: &str) -> Self {
+        match s {
+            "P0" => Self::P0,
+            "P1" => Self::P1,
+            "P2" => Self::P2,
+            _ => Self::None,
+        }
+    }
+}
 
 #[derive(SimpleObject)]
 struct IssueSizeCount {
     size: IssueSize,
+    count: usize,
+}
+#[derive(SimpleObject, Debug)]
+struct IssuePriorityCount {
+    priority: IssuePriority,
     count: usize,
 }
 
@@ -97,6 +120,9 @@ struct IssueStat {
 
     /// The average resolution time in days for resolved issues.
     avg_resolution_days: Option<f64>,
+
+    /// The distribution of priorities for resolved issues.
+    resolved_issue_priority_distribution: Vec<IssuePriorityCount>,
 }
 
 #[Object]
@@ -174,11 +200,30 @@ impl IssueStatQuery {
             )
         };
 
+        let resolved_issue_priority_distribution = resolved_issues
+            .iter()
+            .fold(BTreeMap::new(), |mut acc, issue| {
+                let priority_str = issue
+                    .project_items
+                    .nodes
+                    .iter()
+                    .find(|p| p.project_title == super::TODO_LIST_PROJECT_TITLE)
+                    .and_then(|p| p.todo_priority.as_deref())
+                    .unwrap_or("None");
+
+                *acc.entry(priority_str.into()).or_insert(0) += 1;
+                acc
+            })
+            .into_iter()
+            .map(|(priority, count)| IssuePriorityCount { priority, count })
+            .collect();
+
         Ok(IssueStat {
             open_issue_count,
             resolved_issue_count,
             resolved_issue_size_distribution,
             avg_resolution_days,
+            resolved_issue_priority_distribution,
         })
     }
 }
@@ -597,7 +642,6 @@ mod tests {
         let schema = TestSchema::new();
         let owner: &str = "aicers";
         let repo = "github-dashboard-server";
-
         let mut resolved_issues = create_resolved_issues(1..=6);
         // 1 XS
         resolved_issues[0]
@@ -692,7 +736,7 @@ mod tests {
         let query = r"
         {
             issueStat(filter: {}) {
-                avgResolutionDays
+            avgResolutionDays
             }
         }";
         let data = schema.execute(query).await.data.into_json().unwrap();
@@ -729,5 +773,51 @@ mod tests {
 
         // The average resolution days should be 0.0, not negative.
         assert_eq!(data["issueStat"]["avgResolutionDays"], 0.0);
+    }
+
+    #[tokio::test]
+    async fn resolved_issue_priority_distribution() {
+        let schema = TestSchema::new();
+        let owner: &str = "aicers";
+        let repo = "github-dashboard-server";
+
+        let mut resolved_issues = create_resolved_issues(1..=10);
+        // P0: 2
+        resolved_issues[0].project_items.nodes[0].todo_priority = Some("P0".to_string());
+        resolved_issues[1].project_items.nodes[0].todo_priority = Some("P0".to_string());
+        // P1: 3
+        resolved_issues[2].project_items.nodes[0].todo_priority = Some("P1".to_string());
+        resolved_issues[3].project_items.nodes[0].todo_priority = Some("P1".to_string());
+        resolved_issues[4].project_items.nodes[0].todo_priority = Some("P1".to_string());
+        // P2: 1
+        resolved_issues[5].project_items.nodes[0].todo_priority = Some("P2".to_string());
+        // None: 4
+
+        schema
+            .db
+            .insert_issues(resolved_issues, owner, repo)
+            .unwrap();
+
+        let query = r"
+        {
+            issueStat(filter: {}) {
+                resolvedIssuePriorityDistribution {
+                    priority
+                    count
+                }
+            }
+        }";
+        let data = schema.execute(query).await.data.into_json().unwrap();
+        let dist = &data["issueStat"]["resolvedIssuePriorityDistribution"];
+
+        assert_eq!(dist.as_array().unwrap().len(), 4);
+        assert_eq!(dist[0]["priority"], "P0");
+        assert_eq!(dist[0]["count"], 2);
+        assert_eq!(dist[1]["priority"], "P1");
+        assert_eq!(dist[1]["count"], 3);
+        assert_eq!(dist[2]["priority"], "P2");
+        assert_eq!(dist[2]["count"], 1);
+        assert_eq!(dist[3]["priority"], "NONE");
+        assert_eq!(dist[3]["count"], 4);
     }
 }

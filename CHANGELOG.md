@@ -21,6 +21,8 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   - `openIssueCount`: The number of open issues.
   - `resolvedIssueSizeDistribution`: The distribution of sizes for resolved issues.
   - `avgResolutionDays`: The average resolution time in days for resolved issues.
+  - `resolved_issue_priority_distribution`: The distribution of priorities for resolved
+  issues.
 - Added additional fields to the `issues` GraphQL query, providing detailed
   information such as comments, labels, related sub-issues, linked pull
   requests, issue descriptions, timestamps, and project-related metadata.
