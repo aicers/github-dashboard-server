@@ -44,6 +44,9 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
     merged pull request.
   - `avgMergeDays`: The average number of days from creation to merge for a pull
     request.
+  - `codeChange`: Provides statistics on code changes for merged pull requests,
+    including the total number of `additions`, `deletions`, the net `delta`, and
+    the `total` lines changed.
 
 ### Changed
 
